@@ -1,0 +1,2578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Orion Editor</title>
+<link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@300;400;600;700;900&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════
+   ORION EDITOR — Core Variables
+═══════════════════════════════════════════════════════ */
+:root {
+  --bg0:       #010308;
+  --bg1:       #03060f;
+  --bg2:       #060d1c;
+  --bg3:       #0a1428;
+  --bg4:       #0e1c36;
+  --panel:     rgba(6,13,28,0.82);
+  --panel2:    rgba(3,6,15,0.90);
+  --glass:     rgba(14,28,54,0.60);
+
+  --orion:     #1a8fff;
+  --orion2:    #00cfff;
+  --orion3:    #0055cc;
+  --aurora:    #00ffc8;
+  --pulsar:    #ff3d9a;
+  --nova:      #ffaa00;
+  --neutron:   #b060ff;
+  --solar:     #ff5533;
+  --comet:     #33ffaa;
+
+  --border:    rgba(26,143,255,0.15);
+  --border2:   rgba(26,143,255,0.30);
+  --border3:   rgba(26,143,255,0.55);
+
+  --text:      #d4eaff;
+  --text2:     #7aaed4;
+  --text3:     #3a6080;
+  --text4:     #1a3050;
+
+  --glow-b:    0 0 10px rgba(26,143,255,0.5), 0 0 25px rgba(26,143,255,0.2);
+  --glow-g:    0 0 10px rgba(0,255,200,0.4), 0 0 25px rgba(0,255,200,0.15);
+  --glow-p:    0 0 10px rgba(255,61,154,0.5), 0 0 25px rgba(255,61,154,0.2);
+
+  --radius:    5px;
+  --font-ui:   'Exo 2', sans-serif;
+  --font-code: 'JetBrains Mono', monospace;
+
+  --titlebar-h: 44px;
+  --tabbar-h:   36px;
+  --sidebar-w:  240px;
+  --statusbar-h:26px;
+  --rightpanel-w: 300px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg0);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  cursor: default;
+  user-select: none;
+}
+
+/* ── Starfield Canvas ── */
+#starfield {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+}
+
+/* ── Nebula BG ── */
+.nebula-bg {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background:
+    radial-gradient(ellipse 70% 50% at 15% 25%,  rgba(26,143,255,0.08) 0%, transparent 55%),
+    radial-gradient(ellipse 50% 60% at 85% 75%,  rgba(0,255,200,0.06) 0%, transparent 50%),
+    radial-gradient(ellipse 40% 35% at 55% 5%,   rgba(176,96,255,0.07) 0%, transparent 45%),
+    radial-gradient(ellipse 60% 40% at 30% 90%,  rgba(255,61,154,0.05) 0%, transparent 50%);
+}
+
+/* ── Scanlines ── */
+.scanlines {
+  position: fixed; inset: 0; z-index: 998; pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,0,0,0.025) 2px,
+    rgba(0,0,0,0.025) 4px
+  );
+}
+
+/* ── App Shell ── */
+#app {
+  position: relative; z-index: 1;
+  display: grid;
+  grid-template-areas:
+    "titlebar titlebar titlebar"
+    "sidebar  editor   ai"
+    "statusbar statusbar statusbar";
+  grid-template-rows: var(--titlebar-h) 1fr var(--statusbar-h);
+  grid-template-columns: var(--sidebar-w) 1fr var(--rightpanel-w);
+  height: 100vh;
+  transition: grid-template-columns 0.25s ease;
+}
+#app.sidebar-hidden { grid-template-columns: 0 1fr var(--rightpanel-w); }
+#app.ai-hidden      { grid-template-columns: var(--sidebar-w) 1fr 0; }
+#app.sidebar-hidden.ai-hidden { grid-template-columns: 0 1fr 0; }
+
+/* ══════════════════════════════════════════════════════
+   TITLEBAR
+══════════════════════════════════════════════════════ */
+#titlebar {
+  grid-area: titlebar;
+  display: flex; align-items: center; gap: 10px;
+  padding: 0 14px;
+  background: rgba(1,3,8,0.92);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(20px);
+  box-shadow: 0 2px 24px rgba(0,0,0,0.6);
+  z-index: 100;
+}
+
+.tb-logo {
+  display: flex; align-items: center; gap: 8px;
+  font-family: var(--font-ui);
+  font-weight: 900;
+  font-size: 15px;
+  letter-spacing: 0.12em;
+  color: var(--orion2);
+  text-shadow: var(--glow-b);
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.tb-logo svg { width:22px; height:22px; }
+
+.tb-menu { display: flex; gap: 2px; margin-left: 10px; }
+.tb-menu-item {
+  padding: 4px 10px;
+  border-radius: var(--radius);
+  font-size: 12px;
+  color: var(--text2);
+  cursor: pointer;
+  transition: all 0.15s;
+  position: relative;
+}
+.tb-menu-item:hover { background: rgba(26,143,255,0.1); color: var(--text); }
+.tb-menu-item.active { background: rgba(26,143,255,0.15); color: var(--orion2); }
+
+/* Dropdowns */
+.dropdown {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px); left: 0;
+  min-width: 200px;
+  background: rgba(3,6,15,0.97);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  backdrop-filter: blur(20px);
+  box-shadow: 0 8px 40px rgba(0,0,0,0.8), 0 0 0 1px rgba(26,143,255,0.08);
+  z-index: 999;
+  overflow: hidden;
+  padding: 4px;
+}
+.tb-menu-item:hover .dropdown,
+.tb-menu-item.open .dropdown { display: block; }
+
+.dropdown-item {
+  padding: 6px 12px;
+  border-radius: 3px;
+  font-size: 12px;
+  color: var(--text2);
+  cursor: pointer;
+  display: flex; justify-content: space-between; align-items: center;
+  transition: all 0.12s;
+}
+.dropdown-item:hover { background: rgba(26,143,255,0.12); color: var(--text); }
+.dropdown-item .kbd {
+  font-size: 10px; color: var(--text3);
+  background: rgba(26,143,255,0.08);
+  border: 1px solid var(--border);
+  border-radius: 3px; padding: 1px 5px;
+}
+.dropdown-sep {
+  height: 1px; background: var(--border);
+  margin: 3px 6px;
+}
+
+.tb-spacer { flex: 1; }
+
+.tb-actions { display: flex; gap: 6px; align-items: center; }
+.tb-btn {
+  display: flex; align-items: center; gap: 5px;
+  padding: 5px 11px;
+  border-radius: var(--radius);
+  font-family: var(--font-ui);
+  font-size: 11px; font-weight: 600;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  border: 1px solid var(--border2);
+  background: rgba(26,143,255,0.10);
+  color: var(--orion2);
+  transition: all 0.2s;
+  text-transform: uppercase;
+}
+.tb-btn:hover {
+  background: rgba(26,143,255,0.22);
+  box-shadow: var(--glow-b);
+  transform: translateY(-1px);
+}
+.tb-btn.run {
+  background: rgba(0,255,200,0.12);
+  border-color: rgba(0,255,200,0.3);
+  color: var(--aurora);
+}
+.tb-btn.run:hover { background: rgba(0,255,200,0.22); box-shadow: var(--glow-g); }
+
+.tb-clock {
+  font-family: var(--font-code);
+  font-size: 11px; color: var(--text3);
+  letter-spacing: 0.08em;
+  padding: 0 10px;
+  border-left: 1px solid var(--border);
+}
+
+/* ══════════════════════════════════════════════════════
+   SIDEBAR
+══════════════════════════════════════════════════════ */
+#sidebar {
+  grid-area: sidebar;
+  background: rgba(3,6,15,0.88);
+  border-right: 1px solid var(--border);
+  backdrop-filter: blur(12px);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  transition: width 0.25s ease;
+}
+
+.sidebar-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  background: rgba(1,3,8,0.5);
+  flex-shrink: 0;
+}
+.sidebar-tab {
+  flex: 1; padding: 8px 4px;
+  text-align: center; font-size: 18px;
+  cursor: pointer; color: var(--text3);
+  transition: all 0.15s;
+  border-bottom: 2px solid transparent;
+}
+.sidebar-tab:hover { color: var(--text2); background: rgba(26,143,255,0.05); }
+.sidebar-tab.active { color: var(--orion2); border-bottom-color: var(--orion2); }
+
+.sidebar-panel { display: none; flex: 1; flex-direction: column; overflow: hidden; }
+.sidebar-panel.active { display: flex; }
+
+/* File Explorer */
+.sidebar-header {
+  padding: 8px 12px 6px;
+  font-size: 9px; letter-spacing: 0.2em;
+  color: var(--text3); text-transform: uppercase;
+  display: flex; justify-content: space-between; align-items: center;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.sidebar-header-btn {
+  cursor: pointer; color: var(--text3); font-size: 14px;
+  padding: 2px 5px; border-radius: 3px;
+  transition: all 0.15s;
+}
+.sidebar-header-btn:hover { color: var(--orion2); background: rgba(26,143,255,0.1); }
+
+.file-tree {
+  flex: 1; overflow-y: auto; padding: 4px 0;
+}
+
+.file-item {
+  display: flex; align-items: center; gap: 7px;
+  padding: 5px 10px 5px 14px;
+  font-size: 12px; color: var(--text2);
+  cursor: pointer;
+  transition: all 0.12s;
+  border-left: 2px solid transparent;
+  position: relative;
+}
+.file-item:hover { background: rgba(26,143,255,0.07); color: var(--text); }
+.file-item.active {
+  background: rgba(26,143,255,0.14);
+  color: var(--orion2);
+  border-left-color: var(--orion2);
+}
+.file-item .fi-icon { font-size: 13px; flex-shrink: 0; }
+.file-item .fi-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-item .fi-actions {
+  display: none; gap: 2px;
+}
+.file-item:hover .fi-actions { display: flex; }
+.fi-action-btn {
+  padding: 1px 4px; border-radius: 3px; font-size: 11px;
+  color: var(--text3); cursor: pointer;
+  transition: all 0.12s;
+}
+.fi-action-btn:hover { color: var(--pulsar); background: rgba(255,61,154,0.1); }
+
+.file-item.modified::after {
+  content: '●';
+  position: absolute; right: 10px;
+  color: var(--orion2); font-size: 7px;
+}
+
+/* Search panel */
+.search-panel { padding: 10px; display: flex; flex-direction: column; gap: 8px; flex: 1; overflow-y: auto; }
+.search-input-wrap { position: relative; }
+.search-input {
+  width: 100%; padding: 7px 10px;
+  background: rgba(26,143,255,0.06);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text); font-family: var(--font-code); font-size: 12px;
+  outline: none; transition: all 0.2s;
+}
+.search-input:focus { border-color: var(--orion2); box-shadow: 0 0 10px rgba(26,143,255,0.2); }
+.search-input::placeholder { color: var(--text3); }
+.search-result {
+  padding: 5px 8px; border-radius: 3px;
+  font-size: 11px; color: var(--text2);
+  cursor: pointer; transition: all 0.12s;
+  border-left: 2px solid transparent;
+}
+.search-result:hover { background: rgba(26,143,255,0.08); color: var(--text); border-left-color: var(--orion); }
+.search-result .sr-file { color: var(--orion2); font-size: 10px; margin-bottom: 2px; }
+.search-result .sr-line { font-family: var(--font-code); }
+.search-match { color: var(--nova); background: rgba(255,170,0,0.15); border-radius: 2px; }
+
+/* Snippets panel */
+.snippets-list { flex: 1; overflow-y: auto; padding: 4px 0; }
+.snippet-item {
+  padding: 7px 12px;
+  font-size: 12px; color: var(--text2);
+  cursor: pointer; border-left: 2px solid transparent;
+  transition: all 0.12s;
+}
+.snippet-item:hover { background: rgba(26,143,255,0.07); color: var(--text); border-left-color: var(--aurora); }
+.snippet-item .sn-title { color: var(--aurora); font-size: 11px; font-weight: 600; }
+.snippet-item .sn-prefix {
+  font-family: var(--font-code); font-size: 10px; color: var(--text3);
+  background: rgba(0,255,200,0.06); border: 1px solid rgba(0,255,200,0.15);
+  border-radius: 3px; padding: 1px 5px; display: inline-block; margin-top: 2px;
+}
+
+/* ══════════════════════════════════════════════════════
+   EDITOR AREA
+══════════════════════════════════════════════════════ */
+#editor-area {
+  grid-area: editor;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  background: rgba(6,13,28,0.75);
+  backdrop-filter: blur(6px);
+}
+
+/* Tab Bar */
+#tabbar {
+  display: flex; align-items: center;
+  height: var(--tabbar-h);
+  background: rgba(3,6,15,0.85);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto; overflow-y: hidden;
+  flex-shrink: 0;
+  scrollbar-width: none;
+}
+#tabbar::-webkit-scrollbar { display: none; }
+
+.editor-tab {
+  display: flex; align-items: center; gap: 7px;
+  padding: 0 14px;
+  height: 100%; white-space: nowrap;
+  font-size: 12px; color: var(--text3);
+  cursor: pointer; border-right: 1px solid var(--border);
+  transition: all 0.15s; flex-shrink: 0;
+  position: relative;
+  border-bottom: 2px solid transparent;
+}
+.editor-tab:hover { background: rgba(26,143,255,0.06); color: var(--text2); }
+.editor-tab.active {
+  background: rgba(26,143,255,0.12);
+  color: var(--text); border-bottom-color: var(--orion2);
+  box-shadow: inset 0 0 12px rgba(26,143,255,0.08);
+}
+.editor-tab .tab-icon { font-size: 12px; }
+.editor-tab .tab-close {
+  opacity: 0; margin-left: 4px;
+  font-size: 13px; color: var(--text3);
+  border-radius: 3px; padding: 0 2px;
+  transition: all 0.1s; line-height: 1;
+}
+.editor-tab:hover .tab-close { opacity: 1; }
+.editor-tab .tab-close:hover { color: var(--pulsar); background: rgba(255,61,154,0.15); }
+.editor-tab.modified .tab-close::before { content: '●'; color: var(--orion2); font-size: 8px; }
+.editor-tab.modified:not(:hover) .tab-close::before { opacity: 1; }
+.editor-tab:not(.modified) .tab-close::before { content: '×'; }
+
+.tab-add-btn {
+  padding: 0 12px; height: 100%;
+  display: flex; align-items: center;
+  font-size: 18px; color: var(--text3);
+  cursor: pointer; flex-shrink: 0;
+  transition: all 0.15s;
+}
+.tab-add-btn:hover { color: var(--orion2); background: rgba(26,143,255,0.08); }
+
+/* Code Area */
+#code-wrap {
+  flex: 1; display: flex; overflow: hidden; position: relative;
+}
+
+#line-numbers {
+  padding: 14px 14px 14px 16px;
+  background: rgba(3,6,15,0.65);
+  border-right: 1px solid var(--border);
+  font-family: var(--font-code);
+  font-size: 13px; line-height: 1.72;
+  text-align: right; color: var(--text4);
+  user-select: none; flex-shrink: 0;
+  min-width: 52px; overflow: hidden;
+  pointer-events: none;
+}
+.ln-num { display: block; transition: color 0.1s; }
+.ln-num.active { color: var(--orion2); }
+
+#code-editor {
+  flex: 1;
+  padding: 14px 60px 14px 16px;
+  font-family: var(--font-code);
+  font-size: 13px; line-height: 1.72;
+  color: var(--text);
+  outline: none;
+  overflow: auto;
+  white-space: pre;
+  caret-color: var(--orion2);
+  resize: none;
+  background: transparent;
+  border: none;
+  tab-size: 2;
+  -moz-tab-size: 2;
+}
+
+/* Active line highlight */
+.active-line-overlay {
+  position: absolute; left: 52px; right: 0;
+  height: calc(13px * 1.72);
+  background: rgba(26,143,255,0.04);
+  pointer-events: none;
+  border-left: 1px solid rgba(26,143,255,0.12);
+  transition: top 0.05s;
+}
+
+/* Minimap */
+#minimap {
+  width: 55px; flex-shrink: 0;
+  background: rgba(1,3,8,0.80);
+  border-left: 1px solid var(--border);
+  overflow: hidden; cursor: pointer;
+  position: relative;
+}
+.mm-line {
+  height: 2px; margin: 1px 5px;
+  border-radius: 1px;
+  background: rgba(26,143,255,0.12);
+}
+.mm-line.kw  { background: rgba(176,96,255,0.35); }
+.mm-line.fn  { background: rgba(26,143,255,0.4); }
+.mm-line.str { background: rgba(0,255,200,0.3); }
+.mm-line.num { background: rgba(255,170,0,0.3); }
+.mm-line.cmt { background: rgba(26,60,100,0.4); }
+.mm-viewport {
+  position: absolute; left: 0; right: 0;
+  background: rgba(26,143,255,0.08);
+  border: 1px solid rgba(26,143,255,0.2);
+  pointer-events: none;
+}
+
+/* Bracket match */
+.bracket-hl {
+  position: absolute;
+  border: 1px solid rgba(26,143,255,0.5);
+  border-radius: 2px;
+  pointer-events: none;
+  box-shadow: 0 0 6px rgba(26,143,255,0.3);
+}
+
+/* Find bar */
+#find-bar {
+  display: none;
+  padding: 6px 12px; gap: 8px;
+  align-items: center;
+  background: rgba(3,6,15,0.95);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+#find-bar.visible { display: flex; }
+.find-input {
+  padding: 4px 8px;
+  background: rgba(26,143,255,0.06);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text); font-family: var(--font-code); font-size: 12px;
+  outline: none; width: 200px; transition: all 0.2s;
+}
+.find-input:focus { border-color: var(--orion2); }
+.find-input::placeholder { color: var(--text3); }
+.find-btn {
+  padding: 4px 10px; font-size: 11px;
+  background: rgba(26,143,255,0.1);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  color: var(--orion2); cursor: pointer;
+  font-family: var(--font-ui); font-weight: 600;
+  letter-spacing: 0.05em;
+  transition: all 0.15s;
+}
+.find-btn:hover { background: rgba(26,143,255,0.2); }
+.find-info { font-size: 11px; color: var(--text3); margin-left: 4px; }
+.find-close { margin-left: auto; font-size: 16px; cursor: pointer; color: var(--text3); }
+.find-close:hover { color: var(--pulsar); }
+
+/* Breadcrumb */
+#breadcrumb {
+  padding: 4px 14px;
+  font-size: 11px; color: var(--text3);
+  background: rgba(3,6,15,0.5);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 5px;
+  flex-shrink: 0; letter-spacing: 0.03em;
+}
+#breadcrumb span { cursor: pointer; }
+#breadcrumb span:hover { color: var(--orion2); }
+.bc-sep { color: var(--text4); }
+
+/* ══════════════════════════════════════════════════════
+   RIGHT / AI PANEL
+══════════════════════════════════════════════════════ */
+#ai-panel {
+  grid-area: ai;
+  background: rgba(3,6,15,0.88);
+  border-left: 1px solid var(--border);
+  backdrop-filter: blur(12px);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+
+.panel-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  background: rgba(1,3,8,0.5);
+  flex-shrink: 0;
+}
+.panel-tab {
+  flex: 1; padding: 8px 4px;
+  text-align: center; font-size: 10px;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  cursor: pointer; color: var(--text3);
+  font-weight: 600; font-family: var(--font-ui);
+  transition: all 0.15s;
+  border-bottom: 2px solid transparent;
+}
+.panel-tab:hover { color: var(--text2); }
+.panel-tab.active { color: var(--orion2); border-bottom-color: var(--orion2); }
+
+.panel-content { display: none; flex: 1; flex-direction: column; overflow: hidden; }
+.panel-content.active { display: flex; }
+
+/* AI Chat */
+#ai-chat-messages {
+  flex: 1; overflow-y: auto;
+  padding: 10px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.msg {
+  display: flex; gap: 8px;
+  animation: msgIn 0.25s ease;
+}
+@keyframes msgIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.msg-avatar {
+  width: 26px; height: 26px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; flex-shrink: 0;
+  border: 1px solid var(--border);
+}
+.msg.user .msg-avatar { background: rgba(26,143,255,0.15); border-color: var(--border2); }
+.msg.ai .msg-avatar   { background: rgba(0,255,200,0.10); border-color: rgba(0,255,200,0.25); }
+.msg-body {
+  flex: 1; font-size: 12px; line-height: 1.6; color: var(--text2);
+  background: rgba(14,28,54,0.5);
+  border: 1px solid var(--border);
+  border-radius: 0 6px 6px 6px;
+  padding: 7px 10px;
+}
+.msg.user .msg-body { background: rgba(26,143,255,0.08); border-radius: 6px 0 6px 6px; }
+.msg-body code {
+  font-family: var(--font-code); font-size: 11px;
+  background: rgba(26,143,255,0.08); border: 1px solid var(--border);
+  border-radius: 3px; padding: 0 4px; color: var(--aurora);
+}
+.msg-body pre {
+  font-family: var(--font-code); font-size: 11px;
+  background: rgba(1,3,8,0.8); border: 1px solid var(--border);
+  border-radius: 4px; padding: 8px; margin-top: 6px;
+  overflow-x: auto; color: var(--aurora); line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.ai-chat-input-wrap {
+  padding: 10px; border-top: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 7px; flex-shrink: 0;
+}
+.ai-key-row { display: flex; gap: 6px; align-items: center; }
+.ai-key-label { font-size: 10px; color: var(--text3); white-space: nowrap; }
+.ai-key-input {
+  flex: 1; padding: 5px 8px;
+  background: rgba(26,143,255,0.05); border: 1px solid var(--border);
+  border-radius: var(--radius); color: var(--text);
+  font-family: var(--font-code); font-size: 11px; outline: none;
+  transition: all 0.2s;
+}
+.ai-key-input:focus { border-color: var(--orion2); }
+.ai-key-input::placeholder { color: var(--text4); }
+
+.ai-input-row { display: flex; gap: 6px; }
+.ai-textarea {
+  flex: 1; padding: 7px 9px; min-height: 60px; max-height: 120px;
+  background: rgba(26,143,255,0.05); border: 1px solid var(--border);
+  border-radius: var(--radius); color: var(--text);
+  font-family: var(--font-ui); font-size: 12px; outline: none;
+  resize: vertical; line-height: 1.5; transition: all 0.2s;
+}
+.ai-textarea:focus { border-color: var(--orion2); box-shadow: 0 0 12px rgba(26,143,255,0.15); }
+.ai-textarea::placeholder { color: var(--text3); }
+
+.ai-send-btn {
+  padding: 7px 12px; align-self: flex-end;
+  background: rgba(26,143,255,0.15); border: 1px solid var(--border2);
+  border-radius: var(--radius); color: var(--orion2);
+  font-family: var(--font-ui); font-size: 11px; font-weight: 700;
+  letter-spacing: 0.08em; cursor: pointer;
+  transition: all 0.2s; text-transform: uppercase; white-space: nowrap;
+}
+.ai-send-btn:hover { background: rgba(26,143,255,0.28); box-shadow: var(--glow-b); }
+.ai-send-btn:disabled { opacity: 0.4; cursor: wait; }
+
+.ai-quick-btns { display: flex; gap: 5px; flex-wrap: wrap; }
+.ai-quick-btn {
+  padding: 3px 8px; font-size: 10px;
+  background: rgba(26,143,255,0.06); border: 1px solid var(--border);
+  border-radius: 12px; color: var(--text3); cursor: pointer;
+  transition: all 0.15s; font-family: var(--font-ui);
+}
+.ai-quick-btn:hover { background: rgba(26,143,255,0.15); color: var(--text2); border-color: var(--border2); }
+
+/* APOD Panel */
+#apod-panel { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 10px; }
+.apod-img-wrap {
+  width: 100%; height: 160px;
+  border-radius: var(--radius); border: 1px solid var(--border);
+  overflow: hidden; background: rgba(26,143,255,0.04);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; color: var(--text3);
+}
+.apod-img-wrap img { width: 100%; height: 100%; object-fit: cover; }
+.apod-title-el { font-size: 13px; color: var(--aurora); font-weight: 600; line-height: 1.4; }
+.apod-date-el  { font-size: 10px; color: var(--text3); font-family: var(--font-code); }
+.apod-desc-el  { font-size: 11px; color: var(--text2); line-height: 1.6; }
+.apod-btn {
+  padding: 7px; font-size: 10px; text-align: center;
+  background: rgba(26,143,255,0.08); border: 1px solid var(--border);
+  border-radius: var(--radius); color: var(--orion2); cursor: pointer;
+  font-family: var(--font-ui); font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; transition: all 0.2s;
+}
+.apod-btn:hover { background: rgba(26,143,255,0.18); box-shadow: var(--glow-b); }
+
+/* Settings Panel */
+#settings-panel { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 14px; }
+.setting-group-title {
+  font-size: 9px; letter-spacing: 0.2em; color: var(--text3);
+  text-transform: uppercase; border-bottom: 1px solid var(--border);
+  padding-bottom: 5px; font-weight: 600;
+}
+.setting-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.setting-label { font-size: 12px; color: var(--text2); }
+.setting-select, .setting-input-num {
+  padding: 4px 8px;
+  background: rgba(26,143,255,0.06); border: 1px solid var(--border);
+  border-radius: var(--radius); color: var(--text);
+  font-family: var(--font-code); font-size: 11px; outline: none;
+  transition: border-color 0.2s;
+}
+.setting-select:focus, .setting-input-num:focus { border-color: var(--orion2); }
+.setting-input-num { width: 60px; }
+.setting-toggle {
+  width: 36px; height: 20px; border-radius: 10px;
+  background: var(--bg4); border: 1px solid var(--border);
+  cursor: pointer; position: relative; transition: all 0.25s;
+  flex-shrink: 0;
+}
+.setting-toggle.on { background: rgba(26,143,255,0.3); border-color: var(--orion); }
+.setting-toggle::after {
+  content: ''; position: absolute;
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--text3); top: 2px; left: 2px;
+  transition: all 0.25s;
+}
+.setting-toggle.on::after { left: 18px; background: var(--orion2); }
+
+/* ══════════════════════════════════════════════════════
+   STATUS BAR
+══════════════════════════════════════════════════════ */
+#statusbar {
+  grid-area: statusbar;
+  display: flex; align-items: center;
+  padding: 0 12px; gap: 14px;
+  background: rgba(1,3,8,0.95);
+  border-top: 1px solid var(--border);
+  backdrop-filter: blur(20px);
+  box-shadow: 0 -2px 20px rgba(0,0,0,0.5);
+  font-size: 11px; font-family: var(--font-code);
+}
+.sb-item { display: flex; align-items: center; gap: 4px; color: var(--text3); cursor: pointer; }
+.sb-item:hover { color: var(--text2); }
+.sb-item.accent { color: var(--orion2); }
+.sb-item.git    { color: var(--aurora); }
+.sb-item.lang   { color: var(--neutron); }
+.sb-item.errors { color: var(--solar); }
+.sb-item.warnings { color: var(--nova); }
+.sb-spacer { flex: 1; }
+.sb-mode {
+  font-family: var(--font-ui); font-size: 9px; font-weight: 700;
+  letter-spacing: 0.2em; text-transform: uppercase;
+  color: var(--orion2); text-shadow: var(--glow-b);
+  padding: 2px 8px; border-radius: 3px;
+  border: 1px solid rgba(26,143,255,0.25);
+  background: rgba(26,143,255,0.08);
+}
+
+/* ══════════════════════════════════════════════════════
+   CONTEXT MENU
+══════════════════════════════════════════════════════ */
+#ctx-menu {
+  display: none;
+  position: fixed; z-index: 9999;
+  background: rgba(3,6,15,0.97);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  backdrop-filter: blur(20px);
+  box-shadow: 0 8px 40px rgba(0,0,0,0.8);
+  padding: 4px; min-width: 180px;
+}
+#ctx-menu.visible { display: block; }
+.ctx-item {
+  padding: 6px 12px; font-size: 12px;
+  color: var(--text2); cursor: pointer;
+  border-radius: 3px; transition: all 0.1s;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.ctx-item:hover { background: rgba(26,143,255,0.12); color: var(--text); }
+.ctx-item .ctx-kbd { font-size: 10px; color: var(--text4); }
+.ctx-sep { height: 1px; background: var(--border); margin: 3px 6px; }
+
+/* ══════════════════════════════════════════════════════
+   NOTIFICATIONS
+══════════════════════════════════════════════════════ */
+#notifications {
+  position: fixed; bottom: 40px; right: 14px;
+  z-index: 9998; display: flex; flex-direction: column; gap: 8px;
+  max-width: 320px;
+}
+.notif {
+  padding: 10px 14px;
+  background: rgba(3,6,15,0.97);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.7);
+  font-size: 12px; color: var(--text2);
+  display: flex; gap: 10px; align-items: flex-start;
+  animation: notifIn 0.3s ease;
+  border-left: 3px solid var(--orion);
+}
+.notif.success { border-left-color: var(--aurora); }
+.notif.error   { border-left-color: var(--solar); }
+.notif.warning { border-left-color: var(--nova); }
+@keyframes notifIn {
+  from { opacity:0; transform: translateX(20px); }
+  to   { opacity:1; transform: translateX(0); }
+}
+.notif-icon { font-size: 15px; flex-shrink: 0; }
+.notif-msg  { flex: 1; line-height: 1.5; }
+.notif-close { cursor: pointer; color: var(--text3); font-size: 15px; }
+.notif-close:hover { color: var(--pulsar); }
+
+/* ══════════════════════════════════════════════════════
+   MODAL / DIALOGS
+══════════════════════════════════════════════════════ */
+.modal-backdrop {
+  display: none; position: fixed; inset: 0; z-index: 9990;
+  background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
+  align-items: center; justify-content: center;
+}
+.modal-backdrop.visible { display: flex; }
+.modal {
+  background: rgba(3,6,15,0.98); border: 1px solid var(--border2);
+  border-radius: 8px; box-shadow: 0 20px 60px rgba(0,0,0,0.9), var(--glow-b);
+  padding: 24px; min-width: 380px; max-width: 500px;
+  animation: modalIn 0.2s ease;
+}
+@keyframes modalIn {
+  from { opacity:0; transform: scale(0.95) translateY(-10px); }
+  to   { opacity:1; transform: scale(1) translateY(0); }
+}
+.modal-title {
+  font-family: var(--font-ui); font-weight: 700; font-size: 14px;
+  color: var(--orion2); letter-spacing: 0.05em;
+  margin-bottom: 16px; display: flex; align-items: center; gap: 8px;
+}
+.modal-body { display: flex; flex-direction: column; gap: 12px; }
+.modal-label { font-size: 11px; color: var(--text3); margin-bottom: 4px; }
+.modal-input {
+  width: 100%; padding: 8px 12px;
+  background: rgba(26,143,255,0.06); border: 1px solid var(--border);
+  border-radius: var(--radius); color: var(--text);
+  font-family: var(--font-code); font-size: 13px; outline: none;
+  transition: all 0.2s;
+}
+.modal-input:focus { border-color: var(--orion2); box-shadow: 0 0 12px rgba(26,143,255,0.2); }
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
+.modal-btn {
+  padding: 7px 18px; font-family: var(--font-ui);
+  font-size: 12px; font-weight: 700; letter-spacing: 0.08em;
+  border-radius: var(--radius); cursor: pointer; transition: all 0.2s;
+  text-transform: uppercase;
+}
+.modal-btn.primary {
+  background: rgba(26,143,255,0.2); border: 1px solid var(--border2);
+  color: var(--orion2);
+}
+.modal-btn.primary:hover { background: rgba(26,143,255,0.35); box-shadow: var(--glow-b); }
+.modal-btn.cancel {
+  background: transparent; border: 1px solid var(--border);
+  color: var(--text3);
+}
+.modal-btn.cancel:hover { background: rgba(255,255,255,0.04); color: var(--text2); }
+
+/* ══════════════════════════════════════════════════════
+   COMMAND PALETTE
+══════════════════════════════════════════════════════ */
+#cmd-palette {
+  display: none; position: fixed;
+  top: 80px; left: 50%; transform: translateX(-50%);
+  z-index: 9995; width: 560px;
+  background: rgba(3,6,15,0.98);
+  border: 1px solid var(--border3);
+  border-radius: 8px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.9), var(--glow-b);
+  backdrop-filter: blur(24px);
+  overflow: hidden;
+}
+#cmd-palette.visible { display: block; }
+#cmd-input {
+  width: 100%; padding: 14px 18px;
+  background: transparent; border: none; border-bottom: 1px solid var(--border);
+  color: var(--text); font-family: var(--font-code); font-size: 14px; outline: none;
+}
+#cmd-input::placeholder { color: var(--text3); }
+#cmd-results { max-height: 320px; overflow-y: auto; padding: 6px; }
+.cmd-result {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 12px; border-radius: 4px;
+  font-size: 13px; color: var(--text2); cursor: pointer;
+  transition: all 0.1s;
+}
+.cmd-result:hover, .cmd-result.selected {
+  background: rgba(26,143,255,0.12); color: var(--text);
+}
+.cmd-result .cmd-desc { font-size: 11px; color: var(--text3); }
+.cmd-result .cmd-kbd {
+  font-size: 10px; color: var(--text4);
+  background: rgba(26,143,255,0.08); border: 1px solid var(--border);
+  border-radius: 3px; padding: 2px 6px;
+}
+
+/* ══════════════════════════════════════════════════════
+   MISC
+══════════════════════════════════════════════════════ */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(26,143,255,0.2); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(26,143,255,0.4); }
+
+::selection { background: rgba(26,143,255,0.25); color: var(--text); }
+
+.hidden { display: none !important; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner { display: inline-block; animation: spin 0.8s linear infinite; }
+
+/* Theme variants */
+body.theme-aurora { --orion: #00d4aa; --orion2: #00ffcc; --orion3: #009977; }
+body.theme-pulsar { --orion: #cc2288; --orion2: #ff3d9a; --orion3: #880055; }
+body.theme-nova   { --orion: #cc7700; --orion2: #ffaa00; --orion3: #885500; }
+</style>
+</head>
+<body>
+
+<canvas id="starfield"></canvas>
+<div class="nebula-bg"></div>
+<div class="scanlines"></div>
+
+<!-- NOTIFICATIONS -->
+<div id="notifications"></div>
+
+<!-- CONTEXT MENU -->
+<div id="ctx-menu">
+  <div class="ctx-item" onclick="ctxCopy()">Copy <span class="ctx-kbd">Ctrl+C</span></div>
+  <div class="ctx-item" onclick="ctxCut()">Cut <span class="ctx-kbd">Ctrl+X</span></div>
+  <div class="ctx-item" onclick="ctxPaste()">Paste <span class="ctx-kbd">Ctrl+V</span></div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item" onclick="ctxSelectAll()">Select All <span class="ctx-kbd">Ctrl+A</span></div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item" onclick="aiExplainSelection()">⬡ AI Explain Selection</div>
+  <div class="ctx-item" onclick="aiRefactorSelection()">◈ AI Refactor Selection</div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item" onclick="duplicateLine()">Duplicate Line</div>
+  <div class="ctx-item" onclick="deleteLine()">Delete Line</div>
+</div>
+
+<!-- COMMAND PALETTE -->
+<div id="cmd-palette">
+  <input id="cmd-input" placeholder="⌘ Type a command or search..." autocomplete="off">
+  <div id="cmd-results"></div>
+</div>
+
+<!-- NEW FILE MODAL -->
+<div class="modal-backdrop" id="modal-new-file">
+  <div class="modal">
+    <div class="modal-title">✦ New File</div>
+    <div class="modal-body">
+      <div>
+        <div class="modal-label">File name</div>
+        <input class="modal-input" id="new-file-name" placeholder="untitled.js" autocomplete="off">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="modal-btn cancel" onclick="closeModal('modal-new-file')">Cancel</button>
+      <button class="modal-btn primary" onclick="confirmNewFile()">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- RENAME MODAL -->
+<div class="modal-backdrop" id="modal-rename">
+  <div class="modal">
+    <div class="modal-title">✦ Rename File</div>
+    <div class="modal-body">
+      <div>
+        <div class="modal-label">New name</div>
+        <input class="modal-input" id="rename-input" autocomplete="off">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="modal-btn cancel" onclick="closeModal('modal-rename')">Cancel</button>
+      <button class="modal-btn primary" onclick="confirmRename()">Rename</button>
+    </div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+
+  <!-- TITLEBAR -->
+  <header id="titlebar">
+    <div class="tb-logo">
+      <svg viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="12" r="3" fill="currentColor" opacity="0.9"/>
+        <circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1" opacity="0.5"/>
+        <circle cx="12" cy="12" r="11" stroke="currentColor" stroke-width="0.5" opacity="0.25"/>
+        <line x1="2" y1="12" x2="22" y2="12" stroke="currentColor" stroke-width="0.5" opacity="0.3"/>
+        <line x1="12" y1="2" x2="12" y2="22" stroke="currentColor" stroke-width="0.5" opacity="0.3"/>
+      </svg>
+      ORION
+    </div>
+
+    <nav class="tb-menu">
+      <div class="tb-menu-item" id="menu-file" onclick="toggleMenu(this)">File
+        <div class="dropdown">
+          <div class="dropdown-item" onclick="openNewFileModal()">New File <span class="kbd">Ctrl+N</span></div>
+          <div class="dropdown-item" onclick="openFolder()">Open... <span class="kbd">Ctrl+O</span></div>
+          <div class="dropdown-sep"></div>
+          <div class="dropdown-item" onclick="saveFile()">Save <span class="kbd">Ctrl+S</span></div>
+          <div class="dropdown-item" onclick="saveAllFiles()">Save All <span class="kbd">Ctrl+Shift+S</span></div>
+          <div class="dropdown-sep"></div>
+          <div class="dropdown-item" onclick="downloadFile()">Download File</div>
+          <div class="dropdown-item" onclick="exportAll()">Export All as ZIP</div>
+          <div class="dropdown-sep"></div>
+          <div class="dropdown-item" onclick="closeCurrentTab()">Close Tab <span class="kbd">Ctrl+W</span></div>
+        </div>
+      </div>
+      <div class="tb-menu-item" onclick="toggleMenu(this)">Edit
+        <div class="dropdown">
+          <div class="dropdown-item" onclick="document.execCommand('undo')">Undo <span class="kbd">Ctrl+Z</span></div>
+          <div class="dropdown-item" onclick="document.execCommand('redo')">Redo <span class="kbd">Ctrl+Y</span></div>
+          <div class="dropdown-sep"></div>
+          <div class="dropdown-item" onclick="document.execCommand('cut')">Cut <span class="kbd">Ctrl+X</span></div>
+          <div class="dropdown-item" onclick="document.execCommand('copy')">Copy <span class="kbd">Ctrl+C</span></div>
+          <div class="dropdown-item" onclick="document.execCommand('paste')">Paste <span class="kbd">Ctrl+V</span></div>
+          <div class="dropdown-sep"></div>
+          <div class="dropdown-item" onclick="toggleFind()">Find <span class="kbd">Ctrl+F</span></div>
+          <div class="dropdown-item" onclick="duplicateLine()">Duplicate Line <span class="kbd">Ctrl+D</span></div>
+          <div class="dropdown-item" onclick="commentLine()">Toggle Comment <span class="kbd">Ctrl+/</span></div>
+          <div class="dropdown-item" onclick="formatCode()">Format Code <span class="kbd">Alt+Shift+F</span></div>
+        </div>
+      </div>
+      <div class="tb-menu-item" onclick="toggleMenu(this)">View
+        <div class="dropdown">
+          <div class="dropdown-item" onclick="toggleSidebar()">Toggle Sidebar <span class="kbd">Ctrl+B</span></div>
+          <div class="dropdown-item" onclick="toggleAIPanel()">Toggle AI Panel <span class="kbd">Ctrl+Shift+A</span></div>
+          <div class="dropdown-item" onclick="toggleFind()">Find Bar <span class="kbd">Ctrl+F</span></div>
+          <div class="dropdown-sep"></div>
+          <div class="dropdown-item" onclick="increaseFontSize()">Increase Font <span class="kbd">Ctrl++</span></div>
+          <div class="dropdown-item" onclick="decreaseFontSize()">Decrease Font <span class="kbd">Ctrl+-</span></div>
+          <div class="dropdown-sep"></div>
+          <div class="dropdown-item" onclick="openCmdPalette()">Command Palette <span class="kbd">Ctrl+P</span></div>
+        </div>
+      </div>
+      <div class="tb-menu-item" onclick="toggleMenu(this)">Run
+        <div class="dropdown">
+          <div class="dropdown-item" onclick="runJS()">Run JavaScript <span class="kbd">F5</span></div>
+          <div class="dropdown-item" onclick="previewHTML()">Preview HTML <span class="kbd">Ctrl+Shift+P</span></div>
+          <div class="dropdown-sep"></div>
+          <div class="dropdown-item" onclick="clearConsole()">Clear Console</div>
+        </div>
+      </div>
+    </nav>
+
+    <div class="tb-spacer"></div>
+
+    <div class="tb-actions">
+      <button class="tb-btn" onclick="toggleSidebar()" title="Toggle Sidebar">⊞</button>
+      <button class="tb-btn" onclick="openCmdPalette()">⌘ Command</button>
+      <button class="tb-btn run" onclick="runOrPreview()">▶ Run</button>
+      <div class="tb-clock" id="tb-clock">—</div>
+    </div>
+  </header>
+
+  <!-- SIDEBAR -->
+  <aside id="sidebar">
+    <div class="sidebar-tabs">
+      <div class="sidebar-tab active" title="Files" onclick="switchSidebarTab(this,'files')">📁</div>
+      <div class="sidebar-tab" title="Search" onclick="switchSidebarTab(this,'search')">🔍</div>
+      <div class="sidebar-tab" title="Snippets" onclick="switchSidebarTab(this,'snippets')">⚡</div>
+    </div>
+
+    <!-- Files -->
+    <div class="sidebar-panel active" id="sp-files">
+      <div class="sidebar-header">
+        <span>Explorer</span>
+        <div style="display:flex;gap:4px">
+          <div class="sidebar-header-btn" title="New File" onclick="openNewFileModal()">+</div>
+          <div class="sidebar-header-btn" title="Collapse" onclick="collapseAll()">⊟</div>
+        </div>
+      </div>
+      <div class="file-tree" id="file-tree"></div>
+    </div>
+
+    <!-- Search -->
+    <div class="sidebar-panel" id="sp-search">
+      <div class="sidebar-header"><span>Search in Files</span></div>
+      <div class="search-panel">
+        <input class="search-input" id="global-search" placeholder="Search across all files..." oninput="globalSearch(this.value)">
+        <div id="search-results"></div>
+      </div>
+    </div>
+
+    <!-- Snippets -->
+    <div class="sidebar-panel" id="sp-snippets">
+      <div class="sidebar-header"><span>Code Snippets</span></div>
+      <div class="snippets-list" id="snippets-list"></div>
+    </div>
+  </aside>
+
+  <!-- EDITOR AREA -->
+  <main id="editor-area">
+    <div id="tabbar">
+      <div class="tab-add-btn" onclick="openNewFileModal()" title="New Tab">+</div>
+    </div>
+
+    <div id="breadcrumb">
+      <span onclick="switchSidebarTab(null,'files')">Orion</span>
+      <span class="bc-sep">/</span>
+      <span id="bc-filename">welcome.js</span>
+    </div>
+
+    <div id="code-wrap">
+      <div id="line-numbers"></div>
+      <textarea id="code-editor"
+        spellcheck="false"
+        autocomplete="off"
+        autocorrect="off"
+        autocapitalize="off"
+        oninput="onEditorInput()"
+        onkeydown="onEditorKeydown(event)"
+        onclick="updateCursorPos()"
+        onkeyup="updateCursorPos()"
+        onscroll="syncScroll()"
+        oncontextmenu="showCtxMenu(event)"
+      ></textarea>
+      <div id="minimap"></div>
+    </div>
+
+    <div id="find-bar">
+      <input class="find-input" id="find-input" placeholder="Find..." oninput="doFind()" onkeydown="findKeydown(event)">
+      <input class="find-input" id="replace-input" placeholder="Replace..." style="width:160px">
+      <button class="find-btn" onclick="findPrev()">↑</button>
+      <button class="find-btn" onclick="findNext()">↓</button>
+      <button class="find-btn" onclick="doReplace()">Replace</button>
+      <button class="find-btn" onclick="doReplaceAll()">All</button>
+      <span class="find-info" id="find-info"></span>
+      <span class="find-close" onclick="toggleFind()">×</span>
+    </div>
+  </main>
+
+  <!-- AI PANEL -->
+  <aside id="ai-panel">
+    <div class="panel-tabs">
+      <div class="panel-tab active" onclick="switchPanelTab(this,'ai-chat')">AI</div>
+      <div class="panel-tab" onclick="switchPanelTab(this,'apod-panel')">Space</div>
+      <div class="panel-tab" onclick="switchPanelTab(this,'settings-panel')">Settings</div>
+    </div>
+
+    <!-- AI Chat -->
+    <div class="panel-content active" id="ai-chat">
+      <div id="ai-chat-messages">
+        <div class="msg ai">
+          <div class="msg-avatar">✦</div>
+          <div class="msg-body">Welcome to <strong>Orion Editor</strong>. I'm your AI assistant. I can explain code, refactor, generate functions, debug errors, and more. Paste your OpenAI key below to get started.</div>
+        </div>
+      </div>
+      <div class="ai-chat-input-wrap">
+        <div class="ai-key-row">
+          <div class="ai-key-label">API Key</div>
+          <input class="ai-key-input" id="openai-key" type="password" placeholder="sk-..." oninput="saveAPIKey()">
+        </div>
+        <div class="ai-quick-btns">
+          <div class="ai-quick-btn" onclick="quickAsk('Explain this file')">Explain file</div>
+          <div class="ai-quick-btn" onclick="quickAsk('Find bugs in this code')">Find bugs</div>
+          <div class="ai-quick-btn" onclick="quickAsk('Refactor for readability')">Refactor</div>
+          <div class="ai-quick-btn" onclick="quickAsk('Add JSDoc comments')">Add docs</div>
+          <div class="ai-quick-btn" onclick="quickAsk('Optimize performance')">Optimize</div>
+          <div class="ai-quick-btn" onclick="quickAsk('Write unit tests for this')">Tests</div>
+        </div>
+        <div class="ai-input-row">
+          <textarea class="ai-textarea" id="ai-input" placeholder="Ask anything about your code..." onkeydown="aiInputKeydown(event)"></textarea>
+          <button class="ai-send-btn" id="ai-send-btn" onclick="sendAIMessage()">Send</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- NASA APOD -->
+    <div class="panel-content" id="apod-panel">
+      <div style="padding:10px;display:flex;flex-direction:column;gap:10px;flex:1;overflow-y:auto">
+        <div class="apod-img-wrap" id="apod-img">Loading cosmos...</div>
+        <div class="apod-title-el" id="apod-title">—</div>
+        <div class="apod-date-el"  id="apod-date">—</div>
+        <div class="apod-desc-el"  id="apod-desc">—</div>
+        <button class="apod-btn" onclick="loadAPOD()">↻ New Photo</button>
+        <div style="font-size:10px;color:var(--text3);text-align:center">NASA Astronomy Picture of the Day</div>
+      </div>
+    </div>
+
+    <!-- Settings -->
+    <div class="panel-content" id="settings-panel">
+      <div style="padding:10px;display:flex;flex-direction:column;gap:14px;flex:1;overflow-y:auto">
+
+        <div class="setting-group-title">Editor</div>
+        <div class="setting-row">
+          <div class="setting-label">Font Size</div>
+          <input class="setting-input-num" id="st-fontsize" type="number" min="10" max="28" value="13" onchange="applySettings()">
+        </div>
+        <div class="setting-row">
+          <div class="setting-label">Tab Size</div>
+          <select class="setting-select" id="st-tabsize" onchange="applySettings()">
+            <option value="2">2</option>
+            <option value="4">4</option>
+            <option value="8">8</option>
+          </select>
+        </div>
+        <div class="setting-row">
+          <div class="setting-label">Word Wrap</div>
+          <div class="setting-toggle" id="st-wrap" onclick="toggleSetting(this,'st-wrap')" title="Toggle word wrap"></div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-label">Line Numbers</div>
+          <div class="setting-toggle on" id="st-linenums" onclick="toggleSetting(this,'st-linenums')"></div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-label">Minimap</div>
+          <div class="setting-toggle on" id="st-minimap" onclick="toggleSetting(this,'st-minimap')"></div>
+        </div>
+
+        <div class="setting-group-title">Appearance</div>
+        <div class="setting-row">
+          <div class="setting-label">Accent Color</div>
+          <select class="setting-select" id="st-theme" onchange="applyTheme()">
+            <option value="">Orion Blue</option>
+            <option value="theme-aurora">Aurora Teal</option>
+            <option value="theme-pulsar">Pulsar Pink</option>
+            <option value="theme-nova">Nova Gold</option>
+          </select>
+        </div>
+        <div class="setting-row">
+          <div class="setting-label">Stars</div>
+          <div class="setting-toggle on" id="st-stars" onclick="toggleSetting(this,'st-stars')"></div>
+        </div>
+
+        <div class="setting-group-title">Storage</div>
+        <div class="setting-row">
+          <div class="setting-label">Auto-Save</div>
+          <div class="setting-toggle on" id="st-autosave" onclick="toggleSetting(this,'st-autosave')"></div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <button class="apod-btn" onclick="exportAll()">📦 Export All Files</button>
+          <button class="apod-btn" onclick="clearStorage()" style="border-color:rgba(255,85,51,0.3);color:var(--solar)">⚠ Clear All Data</button>
+        </div>
+
+      </div>
+    </div>
+  </aside>
+
+  <!-- STATUS BAR -->
+  <footer id="statusbar">
+    <div class="sb-item git">⎇ <span id="sb-git">orion/main</span></div>
+    <div class="sb-item errors">⊘ <span id="sb-errors">0</span></div>
+    <div class="sb-item warnings">⚠ <span id="sb-warn">0</span></div>
+    <div class="sb-spacer"></div>
+    <div class="sb-item" id="sb-cursor">Ln 1, Col 1</div>
+    <div class="sb-item" id="sb-selection"></div>
+    <div class="sb-item">UTF-8</div>
+    <div class="sb-item">LF</div>
+    <div class="sb-item lang" id="sb-lang" onclick="promptChangeLang()">JavaScript</div>
+    <div class="sb-item">
+      <span id="sb-filesize">0 B</span>
+    </div>
+    <div class="sb-mode">ORION</div>
+  </footer>
+</div>
+
+<script>
+'use strict';
+
+/* ═══════════════════════════════════════════════════════
+   STATE
+═══════════════════════════════════════════════════════ */
+const LS_KEY = 'orion_editor_v1';
+
+let state = {
+  files: {},          // { id: { id, name, content, lang, modified, created } }
+  tabs: [],           // [id, ...]
+  activeTab: null,
+  settings: {
+    fontSize: 13, tabSize: 2, wordWrap: false,
+    lineNumbers: true, minimap: true, stars: true,
+    autosave: true, theme: ''
+  },
+  apiKey: '',
+  findMatches: [],
+  findIndex: 0,
+  renameTarget: null,
+};
+
+/* ═══════════════════════════════════════════════════════
+   PERSIST
+═══════════════════════════════════════════════════════ */
+function saveState() {
+  try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch(e) {}
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (raw) {
+      const saved = JSON.parse(raw);
+      state.files    = saved.files    || {};
+      state.tabs     = saved.tabs     || [];
+      state.activeTab= saved.activeTab|| null;
+      state.settings = { ...state.settings, ...(saved.settings || {}) };
+      state.apiKey   = saved.apiKey   || '';
+    }
+  } catch(e) {}
+}
+
+/* ═══════════════════════════════════════════════════════
+   STARFIELD
+═══════════════════════════════════════════════════════ */
+const canvas = document.getElementById('starfield');
+const ctx = canvas.getContext('2d');
+let stars = [], animRunning = true;
+
+function resizeCanvas() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  initStars();
+}
+
+function initStars() {
+  stars = Array.from({length: 280}, () => ({
+    x: Math.random() * canvas.width,
+    y: Math.random() * canvas.height,
+    r: Math.random() * 1.5 + 0.2,
+    alpha: Math.random() * 0.8 + 0.1,
+    speed: 0.002 + Math.random() * 0.006,
+    phase: Math.random() * Math.PI * 2,
+    hue: Math.random() > 0.85 ? (Math.random() > 0.5 ? 200 : 280) : 220,
+  }));
+}
+
+function drawStars(t) {
+  if (!state.settings.stars) { ctx.clearRect(0,0,canvas.width,canvas.height); }
+  else {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    stars.forEach(s => {
+      const a = s.alpha * (0.4 + 0.6 * Math.sin(t * s.speed + s.phase));
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI*2);
+      ctx.fillStyle = `hsla(${s.hue},70%,90%,${a})`;
+      ctx.fill();
+    });
+  }
+  requestAnimationFrame(drawStars);
+}
+resizeCanvas();
+requestAnimationFrame(drawStars);
+window.addEventListener('resize', resizeCanvas);
+
+/* ═══════════════════════════════════════════════════════
+   CLOCK
+═══════════════════════════════════════════════════════ */
+function updateClock() {
+  const n = new Date();
+  const p = x => String(x).padStart(2,'0');
+  document.getElementById('tb-clock').textContent =
+    `${p(n.getUTCHours())}:${p(n.getUTCMinutes())}:${p(n.getUTCSeconds())} UTC`;
+}
+updateClock(); setInterval(updateClock, 1000);
+
+/* ═══════════════════════════════════════════════════════
+   LANGUAGE DETECTION
+═══════════════════════════════════════════════════════ */
+const LANG_MAP = {
+  js: 'JavaScript', ts: 'TypeScript', jsx: 'JSX', tsx: 'TSX',
+  html: 'HTML', htm: 'HTML', css: 'CSS', scss: 'SCSS', sass: 'SASS',
+  json: 'JSON', md: 'Markdown', py: 'Python', rb: 'Ruby',
+  rs: 'Rust', go: 'Go', java: 'Java', cpp: 'C++', c: 'C',
+  sh: 'Shell', bash: 'Bash', sql: 'SQL', xml: 'XML', yaml: 'YAML', yml: 'YAML',
+  txt: 'Plain Text', php: 'PHP', swift: 'Swift', kt: 'Kotlin',
+};
+
+const LANG_ICONS = {
+  js:'🟨', ts:'🔷', jsx:'⚛', tsx:'⚛', html:'🌐', css:'🎨', scss:'🎨',
+  json:'📋', md:'📝', py:'🐍', rs:'🦀', go:'🐹', java:'☕', cpp:'⚙',
+  sh:'💻', sql:'🗃', xml:'📄', yaml:'⚙', txt:'📄', php:'🐘', swift:'🍎',
+};
+
+function getLang(filename) {
+  const ext = filename.split('.').pop().toLowerCase();
+  return LANG_MAP[ext] || 'Plain Text';
+}
+
+function getIcon(filename) {
+  const ext = filename.split('.').pop().toLowerCase();
+  return LANG_ICONS[ext] || '📄';
+}
+
+/* ═══════════════════════════════════════════════════════
+   FILE MANAGEMENT
+═══════════════════════════════════════════════════════ */
+function genId() { return 'f_' + Date.now() + '_' + Math.random().toString(36).slice(2,6); }
+
+function createFile(name, content = '') {
+  const id = genId();
+  const file = {
+    id, name, content,
+    lang: getLang(name),
+    modified: false,
+    created: Date.now(),
+    cursor: 0,
+  };
+  state.files[id] = file;
+  if (!state.tabs.includes(id)) state.tabs.push(id);
+  saveState();
+  return id;
+}
+
+function openFile(id) {
+  if (!state.files[id]) return;
+  if (!state.tabs.includes(id)) state.tabs.push(id);
+  // Save current cursor
+  if (state.activeTab && state.files[state.activeTab]) {
+    state.files[state.activeTab].cursor = document.getElementById('code-editor').selectionStart;
+  }
+  state.activeTab = id;
+  saveState();
+  renderAll();
+}
+
+function saveFile() {
+  if (!state.activeTab) return;
+  const file = state.files[state.activeTab];
+  if (!file) return;
+  file.content = document.getElementById('code-editor').value;
+  file.modified = false;
+  saveState();
+  renderTabs();
+  renderFileTree();
+  notify('✓ Saved ' + file.name, 'success');
+}
+
+function saveAllFiles() {
+  Object.values(state.files).forEach(f => { f.modified = false; });
+  saveState();
+  renderTabs();
+  renderFileTree();
+  notify('✓ All files saved', 'success');
+}
+
+function closeTab(id, e) {
+  if (e) e.stopPropagation();
+  const file = state.files[id];
+  if (file && file.modified) {
+    // Auto-save on close
+    file.content = document.getElementById('code-editor').value;
+    file.modified = false;
+  }
+  state.tabs = state.tabs.filter(t => t !== id);
+  if (state.activeTab === id) {
+    state.activeTab = state.tabs[state.tabs.length - 1] || null;
+  }
+  saveState();
+  renderAll();
+}
+
+function closeCurrentTab() { if (state.activeTab) closeTab(state.activeTab); }
+
+function deleteFile(id, e) {
+  if (e) e.stopPropagation();
+  const file = state.files[id];
+  if (!file) return;
+  if (!confirm(`Delete "${file.name}"?`)) return;
+  delete state.files[id];
+  state.tabs = state.tabs.filter(t => t !== id);
+  if (state.activeTab === id) {
+    state.activeTab = state.tabs[state.tabs.length - 1] || null;
+  }
+  saveState();
+  renderAll();
+  notify('Deleted ' + file.name);
+}
+
+function openNewFileModal() {
+  closeAllMenus();
+  document.getElementById('new-file-name').value = '';
+  document.getElementById('modal-new-file').classList.add('visible');
+  setTimeout(() => document.getElementById('new-file-name').focus(), 50);
+}
+
+function confirmNewFile() {
+  const name = document.getElementById('new-file-name').value.trim() || 'untitled.js';
+  closeModal('modal-new-file');
+  const id = createFile(name);
+  openFile(id);
+  notify('✓ Created ' + name, 'success');
+}
+
+function openRenameModal(id, e) {
+  if(e) e.stopPropagation();
+  state.renameTarget = id;
+  document.getElementById('rename-input').value = state.files[id].name;
+  document.getElementById('modal-rename').classList.add('visible');
+  setTimeout(() => document.getElementById('rename-input').focus(), 50);
+}
+
+function confirmRename() {
+  const id = state.renameTarget;
+  const newName = document.getElementById('rename-input').value.trim();
+  if (!newName || !state.files[id]) { closeModal('modal-rename'); return; }
+  state.files[id].name = newName;
+  state.files[id].lang = getLang(newName);
+  saveState();
+  closeModal('modal-rename');
+  renderAll();
+  notify('✓ Renamed to ' + newName, 'success');
+}
+
+function downloadFile() {
+  if (!state.activeTab) return;
+  const file = state.files[state.activeTab];
+  const blob = new Blob([file.content], {type:'text/plain'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = file.name;
+  a.click();
+}
+
+async function exportAll() {
+  // Simple multi-file export as text bundle
+  const files = Object.values(state.files);
+  if (!files.length) { notify('No files to export', 'warning'); return; }
+  let bundle = `// ORION EDITOR EXPORT — ${new Date().toISOString()}\n\n`;
+  files.forEach(f => {
+    bundle += `// ═══ FILE: ${f.name} ═══\n${f.content}\n\n`;
+  });
+  const blob = new Blob([bundle], {type:'text/plain'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `orion-export-${Date.now()}.txt`;
+  a.click();
+  notify('✓ Exported ' + files.length + ' files', 'success');
+}
+
+function clearStorage() {
+  if (!confirm('This will delete ALL files and settings. Are you sure?')) return;
+  localStorage.removeItem(LS_KEY);
+  state.files = {}; state.tabs = []; state.activeTab = null;
+  renderAll();
+  notify('Storage cleared', 'warning');
+}
+
+function openFolder() {
+  const input = document.createElement('input');
+  input.type = 'file'; input.multiple = true;
+  input.onchange = e => {
+    Array.from(e.target.files).forEach(file => {
+      const reader = new FileReader();
+      reader.onload = ev => {
+        const id = createFile(file.name, ev.target.result);
+        if (!state.activeTab) openFile(id);
+        else { renderAll(); }
+      };
+      reader.readAsText(file);
+    });
+  };
+  input.click();
+}
+
+/* ═══════════════════════════════════════════════════════
+   EDITOR INPUT HANDLING
+═══════════════════════════════════════════════════════ */
+let autoSaveTimer = null;
+
+function onEditorInput() {
+  if (!state.activeTab) return;
+  const file = state.files[state.activeTab];
+  const val = document.getElementById('code-editor').value;
+  file.content = val;
+  if (!file.modified) {
+    file.modified = true;
+    renderTabs();
+    renderFileTree();
+  }
+  renderLineNumbers();
+  renderMinimap();
+  updateStatusBar();
+
+  if (state.settings.autosave) {
+    clearTimeout(autoSaveTimer);
+    autoSaveTimer = setTimeout(() => {
+      file.modified = false;
+      saveState();
+      renderTabs();
+      renderFileTree();
+    }, 1500);
+  }
+}
+
+function onEditorKeydown(e) {
+  const ed = document.getElementById('code-editor');
+  const start = ed.selectionStart;
+  const end   = ed.selectionEnd;
+  const val   = ed.value;
+
+  // Tab key
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const tab = ' '.repeat(state.settings.tabSize);
+    if (start !== end) {
+      // Indent/unindent selection
+      const lines = val.split('\n');
+      let charCount = 0; let startLine = 0; let endLine = 0;
+      lines.forEach((l, i) => {
+        if (charCount <= start) startLine = i;
+        if (charCount < end) endLine = i;
+        charCount += l.length + 1;
+      });
+      const modified = lines.map((l, i) => {
+        if (i < startLine || i > endLine) return l;
+        return e.shiftKey ? l.replace(/^ {1,2}/, '') : tab + l;
+      });
+      const newVal = modified.join('\n');
+      ed.value = newVal;
+      onEditorInput();
+    } else {
+      const newVal = val.slice(0, start) + tab + val.slice(end);
+      ed.value = newVal;
+      ed.selectionStart = ed.selectionEnd = start + tab.length;
+      onEditorInput();
+    }
+    return;
+  }
+
+  // Enter — auto-indent
+  if (e.key === 'Enter') {
+    const lineStart = val.lastIndexOf('\n', start - 1) + 1;
+    const currentLine = val.slice(lineStart, start);
+    const indent = currentLine.match(/^(\s*)/)[1];
+    const lastChar = currentLine.trim().slice(-1);
+    const extra = (lastChar === '{' || lastChar === '[' || lastChar === '(') ? ' '.repeat(state.settings.tabSize) : '';
+    e.preventDefault();
+    const insert = '\n' + indent + extra;
+    const newVal = val.slice(0, start) + insert + val.slice(end);
+    ed.value = newVal;
+    ed.selectionStart = ed.selectionEnd = start + insert.length;
+    onEditorInput();
+    // Auto-close bracket
+    if (extra && (lastChar === '{' || lastChar === '[' || lastChar === '(')) {
+      const close = lastChar === '{' ? '}' : lastChar === '[' ? ']' : ')';
+      const pos = ed.selectionStart;
+      ed.value = ed.value.slice(0, pos) + '\n' + indent + close + ed.value.slice(pos);
+      ed.selectionStart = ed.selectionEnd = pos;
+    }
+    return;
+  }
+
+  // Auto-close brackets/quotes
+  const pairs = {'(':')', '[':']', '{':'}', '"':'"', "'":"'", '`':'`'};
+  if (pairs[e.key] && start === end) {
+    e.preventDefault();
+    const newVal = val.slice(0,start) + e.key + pairs[e.key] + val.slice(end);
+    ed.value = newVal;
+    ed.selectionStart = ed.selectionEnd = start + 1;
+    onEditorInput();
+    return;
+  }
+
+  // Skip closing char
+  const closers = new Set([')', ']', '}', '"', "'", '`']);
+  if (closers.has(e.key) && val[start] === e.key) {
+    e.preventDefault();
+    ed.selectionStart = ed.selectionEnd = start + 1;
+    return;
+  }
+
+  // Backspace delete pair
+  if (e.key === 'Backspace' && start === end && start > 0) {
+    const prev = val[start-1], next = val[start];
+    if ((prev === '(' && next === ')') || (prev === '[' && next === ']') ||
+        (prev === '{' && next === '}') || (prev === '"' && next === '"') ||
+        (prev === "'" && next === "'") || (prev === '`' && next === '`')) {
+      e.preventDefault();
+      ed.value = val.slice(0,start-1) + val.slice(start+1);
+      ed.selectionStart = ed.selectionEnd = start - 1;
+      onEditorInput();
+      return;
+    }
+  }
+
+  // Global shortcuts
+  if (e.ctrlKey || e.metaKey) {
+    if (e.key === 's') { e.preventDefault(); e.shiftKey ? saveAllFiles() : saveFile(); }
+    if (e.key === 'f') { e.preventDefault(); toggleFind(); }
+    if (e.key === 'n') { e.preventDefault(); openNewFileModal(); }
+    if (e.key === 'w') { e.preventDefault(); closeCurrentTab(); }
+    if (e.key === 'b') { e.preventDefault(); toggleSidebar(); }
+    if (e.key === 'd') { e.preventDefault(); duplicateLine(); }
+    if (e.key === '/') { e.preventDefault(); commentLine(); }
+    if (e.key === 'p') { e.preventDefault(); openCmdPalette(); }
+    if (e.key === '=') { e.preventDefault(); increaseFontSize(); }
+    if (e.key === '-') { e.preventDefault(); decreaseFontSize(); }
+  }
+  if (e.key === 'F5') { e.preventDefault(); runOrPreview(); }
+  if (e.altKey && e.shiftKey && e.key === 'F') { e.preventDefault(); formatCode(); }
+}
+
+/* ═══════════════════════════════════════════════════════
+   EDITING UTILITIES
+═══════════════════════════════════════════════════════ */
+function duplicateLine() {
+  const ed = document.getElementById('code-editor');
+  const val = ed.value; const pos = ed.selectionStart;
+  const lineStart = val.lastIndexOf('\n', pos-1)+1;
+  const lineEnd   = val.indexOf('\n', pos); 
+  const end = lineEnd === -1 ? val.length : lineEnd;
+  const line = val.slice(lineStart, end);
+  const insert = '\n' + line;
+  ed.value = val.slice(0,end) + insert + val.slice(end);
+  ed.selectionStart = ed.selectionEnd = end + insert.length;
+  onEditorInput();
+}
+
+function deleteLine() {
+  const ed = document.getElementById('code-editor');
+  const val = ed.value; const pos = ed.selectionStart;
+  const lineStart = val.lastIndexOf('\n', pos-1)+1;
+  let lineEnd   = val.indexOf('\n', pos);
+  if (lineEnd === -1) lineEnd = val.length;
+  else lineEnd++;
+  ed.value = val.slice(0, lineStart) + val.slice(lineEnd);
+  ed.selectionStart = ed.selectionEnd = lineStart;
+  onEditorInput();
+}
+
+function commentLine() {
+  const ed = document.getElementById('code-editor');
+  const val = ed.value; const start = ed.selectionStart; const end = ed.selectionEnd;
+  const lineStart = val.lastIndexOf('\n', start-1)+1;
+  const lineEnd   = end === start ? (val.indexOf('\n', start) === -1 ? val.length : val.indexOf('\n', start)) : end;
+  const line = val.slice(lineStart, lineEnd);
+  const newLine = line.startsWith('// ') ? line.slice(3) : '// ' + line;
+  const diff = newLine.length - line.length;
+  ed.value = val.slice(0,lineStart) + newLine + val.slice(lineEnd);
+  ed.selectionStart = start + diff; ed.selectionEnd = end + diff;
+  onEditorInput();
+}
+
+function formatCode() {
+  const ed = document.getElementById('code-editor');
+  let code = ed.value;
+  // Basic formatter: consistent indentation, trim trailing whitespace
+  const lines = code.split('\n');
+  let indent = 0;
+  const formatted = lines.map(line => {
+    const trimmed = line.trim();
+    if (!trimmed) return '';
+    const close = (trimmed.startsWith('}') || trimmed.startsWith(')') || trimmed.startsWith(']'));
+    if (close && indent > 0) indent--;
+    const result = '  '.repeat(indent) + trimmed;
+    const opens = (trimmed.match(/[{(\[]/g)||[]).length;
+    const closes = (trimmed.match(/[})\]]/g)||[]).length;
+    indent = Math.max(0, indent + opens - closes);
+    return result;
+  });
+  ed.value = formatted.join('\n');
+  onEditorInput();
+  notify('✓ Code formatted', 'success');
+}
+
+/* ═══════════════════════════════════════════════════════
+   FIND & REPLACE
+═══════════════════════════════════════════════════════ */
+function toggleFind() {
+  const bar = document.getElementById('find-bar');
+  bar.classList.toggle('visible');
+  if (bar.classList.contains('visible')) {
+    document.getElementById('find-input').focus();
+    doFind();
+  } else {
+    state.findMatches = []; state.findIndex = 0;
+    document.getElementById('find-info').textContent = '';
+  }
+}
+
+function doFind() {
+  const query = document.getElementById('find-input').value;
+  const ed = document.getElementById('code-editor');
+  if (!query) { state.findMatches = []; document.getElementById('find-info').textContent = ''; return; }
+  const val = ed.value;
+  const matches = [];
+  let i = 0;
+  while ((i = val.indexOf(query, i)) !== -1) { matches.push(i); i += query.length; }
+  state.findMatches = matches;
+  state.findIndex = 0;
+  document.getElementById('find-info').textContent = matches.length ? `${matches.length} result${matches.length>1?'s':''}` : 'Not found';
+  if (matches.length) highlightFindResult();
+}
+
+function findNext() {
+  if (!state.findMatches.length) return;
+  state.findIndex = (state.findIndex + 1) % state.findMatches.length;
+  highlightFindResult();
+}
+function findPrev() {
+  if (!state.findMatches.length) return;
+  state.findIndex = (state.findIndex - 1 + state.findMatches.length) % state.findMatches.length;
+  highlightFindResult();
+}
+
+function highlightFindResult() {
+  const ed = document.getElementById('code-editor');
+  const pos = state.findMatches[state.findIndex];
+  const len = document.getElementById('find-input').value.length;
+  ed.focus(); ed.setSelectionRange(pos, pos + len);
+  document.getElementById('find-info').textContent = `${state.findIndex+1} / ${state.findMatches.length}`;
+}
+
+function doReplace() {
+  const ed = document.getElementById('code-editor');
+  const query = document.getElementById('find-input').value;
+  const rep   = document.getElementById('replace-input').value;
+  if (!query || !state.findMatches.length) return;
+  const pos = state.findMatches[state.findIndex];
+  ed.value = ed.value.slice(0,pos) + rep + ed.value.slice(pos + query.length);
+  onEditorInput(); doFind();
+}
+
+function doReplaceAll() {
+  const ed = document.getElementById('code-editor');
+  const query = document.getElementById('find-input').value;
+  const rep   = document.getElementById('replace-input').value;
+  if (!query) return;
+  const count = (ed.value.split(query).length - 1);
+  ed.value = ed.value.split(query).join(rep);
+  onEditorInput(); doFind();
+  notify(`✓ Replaced ${count} occurrence${count!==1?'s':''}`, 'success');
+}
+
+function findKeydown(e) {
+  if (e.key === 'Enter') e.shiftKey ? findPrev() : findNext();
+  if (e.key === 'Escape') toggleFind();
+}
+
+/* ═══════════════════════════════════════════════════════
+   RUN / PREVIEW
+═══════════════════════════════════════════════════════ */
+function runOrPreview() {
+  if (!state.activeTab) return;
+  const file = state.files[state.activeTab];
+  if (file.lang === 'HTML') previewHTML();
+  else runJS();
+}
+
+function runJS() {
+  if (!state.activeTab) return;
+  const code = document.getElementById('code-editor').value;
+  const win = window.open('', '_blank');
+  win.document.write(`<!DOCTYPE html><html><head><title>Orion Run</title>
+  <style>body{background:#010308;color:#d4eaff;font-family:'JetBrains Mono',monospace;padding:20px}
+  .out{margin:4px 0;border-left:3px solid #1a8fff;padding:4px 10px;font-size:13px}
+  .err{border-left-color:#ff5533;color:#ff8866}</style></head>
+  <body><div id="log"></div><script>
+  const _log=document.getElementById('log');
+  console.log=(...a)=>{const d=document.createElement('div');d.className='out';d.textContent=a.join(' ');_log.appendChild(d)};
+  console.error=(...a)=>{const d=document.createElement('div');d.className='out err';d.textContent='ERROR: '+a.join(' ');_log.appendChild(d)};
+  try{${code}}catch(e){console.error(e.message)};
+  <\/script></body></html>`);
+  win.document.close();
+}
+
+function previewHTML() {
+  if (!state.activeTab) return;
+  const code = document.getElementById('code-editor').value;
+  const win = window.open('', '_blank');
+  win.document.write(code);
+  win.document.close();
+}
+
+function clearConsole() { notify('Console cleared', 'success'); }
+
+/* ═══════════════════════════════════════════════════════
+   GLOBAL SEARCH
+═══════════════════════════════════════════════════════ */
+function globalSearch(query) {
+  const container = document.getElementById('search-results');
+  if (!query.trim()) { container.innerHTML = ''; return; }
+  const results = [];
+  Object.values(state.files).forEach(file => {
+    const lines = file.content.split('\n');
+    lines.forEach((line, i) => {
+      if (line.toLowerCase().includes(query.toLowerCase())) {
+        results.push({ file, line: line.trim(), lineNum: i+1 });
+      }
+    });
+  });
+  if (!results.length) { container.innerHTML = '<div style="font-size:11px;color:var(--text3);padding:8px">No results</div>'; return; }
+  container.innerHTML = results.slice(0,50).map(r => {
+    const hl = r.line.replace(new RegExp(escapeRE(query),'gi'), m => `<span class="search-match">${m}</span>`);
+    return `<div class="search-result" onclick="openFile('${r.file.id}')">
+      <div class="sr-file">${r.file.name}:${r.lineNum}</div>
+      <div class="sr-line">${hl}</div>
+    </div>`;
+  }).join('');
+}
+
+function escapeRE(s) { return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); }
+
+/* ═══════════════════════════════════════════════════════
+   SNIPPETS
+═══════════════════════════════════════════════════════ */
+const SNIPPETS = [
+  { title:'Console Log', prefix:'cl', body:'console.log($1);', lang:'JavaScript' },
+  { title:'Arrow Function', prefix:'af', body:'const $1 = ($2) => {\n  $3\n};', lang:'JavaScript' },
+  { title:'Async Function', prefix:'asf', body:'async function $1($2) {\n  try {\n    $3\n  } catch(e) {\n    console.error(e);\n  }\n}', lang:'JavaScript' },
+  { title:'Fetch GET', prefix:'fetch', body:"fetch('$1')\n  .then(r => r.json())\n  .then(data => console.log(data))\n  .catch(err => console.error(err));", lang:'JavaScript' },
+  { title:'Class', prefix:'cls', body:'class $1 {\n  constructor($2) {\n    $3\n  }\n}', lang:'JavaScript' },
+  { title:'For Loop', prefix:'for', body:'for (let i = 0; i < $1.length; i++) {\n  $2\n}', lang:'JavaScript' },
+  { title:'HTML Boilerplate', prefix:'html5', body:'<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <title>$1</title>\n</head>\n<body>\n  $2\n</body>\n</html>', lang:'HTML' },
+  { title:'CSS Flexbox', prefix:'flex', body:'.container {\n  display: flex;\n  align-items: center;\n  justify-content: $1;\n  gap: $2;\n}', lang:'CSS' },
+  { title:'CSS Grid', prefix:'grid', body:'.container {\n  display: grid;\n  grid-template-columns: $1;\n  gap: $2;\n}', lang:'CSS' },
+  { title:'JSON Object', prefix:'jobj', body:'{\n  "$1": "$2"\n}', lang:'JSON' },
+];
+
+function renderSnippets() {
+  document.getElementById('snippets-list').innerHTML = SNIPPETS.map((s,i) =>
+    `<div class="snippet-item" onclick="insertSnippet(${i})">
+      <div class="sn-title">${s.title}</div>
+      <span class="sn-prefix">${s.prefix}</span>
+    </div>`
+  ).join('');
+}
+
+function insertSnippet(i) {
+  const s = SNIPPETS[i];
+  const ed = document.getElementById('code-editor');
+  const pos = ed.selectionStart;
+  const body = s.body.replace(/\$\d/g, '');
+  ed.value = ed.value.slice(0,pos) + body + ed.value.slice(pos);
+  ed.selectionStart = ed.selectionEnd = pos + body.length;
+  ed.focus();
+  onEditorInput();
+  notify('✓ Inserted: ' + s.title, 'success');
+}
+
+/* ═══════════════════════════════════════════════════════
+   RENDER
+═══════════════════════════════════════════════════════ */
+function renderAll() {
+  renderFileTree();
+  renderTabs();
+  renderEditor();
+  renderLineNumbers();
+  renderMinimap();
+  updateStatusBar();
+  applySettings();
+}
+
+function renderFileTree() {
+  const tree = document.getElementById('file-tree');
+  const files = Object.values(state.files).sort((a,b) => a.name.localeCompare(b.name));
+  if (!files.length) {
+    tree.innerHTML = `<div style="padding:16px 14px;font-size:11px;color:var(--text3);line-height:1.7">
+      No files yet.<br>Click <strong style="color:var(--orion2)">+</strong> to create one, or drag & drop files here.
+    </div>`;
+    return;
+  }
+  tree.innerHTML = files.map(f => `
+    <div class="file-item ${f.id === state.activeTab ? 'active' : ''} ${f.modified ? 'modified' : ''}"
+         onclick="openFile('${f.id}')">
+      <span class="fi-icon">${getIcon(f.name)}</span>
+      <span class="fi-name">${f.name}</span>
+      <span class="fi-actions">
+        <span class="fi-action-btn" title="Rename" onclick="openRenameModal('${f.id}',event)">✎</span>
+        <span class="fi-action-btn" title="Delete" onclick="deleteFile('${f.id}',event)">✕</span>
+      </span>
+    </div>`
+  ).join('');
+}
+
+function renderTabs() {
+  const tabbar = document.getElementById('tabbar');
+  const addBtn = tabbar.querySelector('.tab-add-btn');
+  // Remove old tabs
+  tabbar.querySelectorAll('.editor-tab').forEach(t => t.remove());
+
+  state.tabs.forEach(id => {
+    const file = state.files[id];
+    if (!file) return;
+    const tab = document.createElement('div');
+    tab.className = `editor-tab ${id === state.activeTab ? 'active' : ''} ${file.modified ? 'modified' : ''}`;
+    tab.innerHTML = `<span class="tab-icon">${getIcon(file.name)}</span><span>${file.name}</span><span class="tab-close" onclick="closeTab('${id}',event)"></span>`;
+    tab.addEventListener('click', () => openFile(id));
+    tabbar.insertBefore(tab, addBtn);
+  });
+}
+
+function renderEditor() {
+  const ed = document.getElementById('code-editor');
+  const file = state.activeTab ? state.files[state.activeTab] : null;
+  if (file) {
+    ed.value = file.content;
+    ed.disabled = false;
+    document.getElementById('bc-filename').textContent = file.name;
+    document.getElementById('sb-lang').textContent = file.lang;
+    // Restore cursor
+    if (file.cursor) {
+      ed.selectionStart = ed.selectionEnd = file.cursor;
+    }
+  } else {
+    ed.value = '';
+    ed.disabled = true;
+    document.getElementById('bc-filename').textContent = '—';
+  }
+}
+
+function renderLineNumbers() {
+  const ed = document.getElementById('code-editor');
+  const lnEl = document.getElementById('line-numbers');
+  if (!state.settings.lineNumbers) { lnEl.innerHTML = ''; return; }
+  const lines = ed.value.split('\n').length;
+  const pos = ed.selectionStart;
+  const currentLine = ed.value.slice(0, pos).split('\n').length;
+  lnEl.innerHTML = Array.from({length: lines}, (_,i) =>
+    `<span class="ln-num ${i+1 === currentLine ? 'active' : ''}">${i+1}</span>`
+  ).join('');
+  // Sync scroll
+  lnEl.scrollTop = ed.scrollTop;
+}
+
+function renderMinimap() {
+  const mm = document.getElementById('minimap');
+  if (!state.settings.minimap) { mm.style.display = 'none'; return; }
+  mm.style.display = 'block';
+  const ed = document.getElementById('code-editor');
+  const lines = ed.value.split('\n');
+  const types = ['','kw','fn','str','num','cmt'];
+  let html = '';
+  lines.slice(0, 100).forEach(line => {
+    let cls = '';
+    if (/^\s*(\/\/|\/\*)/.test(line)) cls = 'cmt';
+    else if (/\b(function|class|const|let|var|if|for|while|return|async|await)\b/.test(line)) cls = 'kw';
+    else if (/\w+\s*\(/.test(line)) cls = 'fn';
+    else if (/'[^']*'|"[^"]*"|`[^`]*`/.test(line)) cls = 'str';
+    else if (/\b\d+\b/.test(line)) cls = 'num';
+    const w = Math.min(45, Math.max(5, (line.trim().length / 80) * 45));
+    html += `<div class="mm-line ${cls}" style="width:${w}px"></div>`;
+  });
+  // Keep viewport indicator
+  const vpHtml = `<div class="mm-viewport" style="top:${(ed.scrollTop / Math.max(1, ed.scrollHeight)) * mm.scrollHeight}px;height:${(ed.clientHeight / Math.max(1, ed.scrollHeight)) * mm.scrollHeight}px"></div>`;
+  mm.innerHTML = html + vpHtml;
+}
+
+function syncScroll() {
+  const ed = document.getElementById('code-editor');
+  const ln = document.getElementById('line-numbers');
+  ln.scrollTop = ed.scrollTop;
+  renderMinimap();
+}
+
+function updateCursorPos() {
+  const ed = document.getElementById('code-editor');
+  const val = ed.value;
+  const pos = ed.selectionStart;
+  const end = ed.selectionEnd;
+  const lines = val.slice(0, pos).split('\n');
+  const ln = lines.length;
+  const col = lines[lines.length-1].length + 1;
+  document.getElementById('sb-cursor').textContent = `Ln ${ln}, Col ${col}`;
+  const sel = end - pos;
+  document.getElementById('sb-selection').textContent = sel > 0 ? `(${sel} selected)` : '';
+  renderLineNumbers();
+  if (state.activeTab && state.files[state.activeTab]) {
+    state.files[state.activeTab].cursor = pos;
+  }
+}
+
+function updateStatusBar() {
+  if (!state.activeTab) return;
+  const file = state.files[state.activeTab];
+  const bytes = new Blob([file.content]).size;
+  document.getElementById('sb-filesize').textContent =
+    bytes < 1024 ? bytes + ' B' : (bytes/1024).toFixed(1) + ' KB';
+}
+
+/* ═══════════════════════════════════════════════════════
+   SETTINGS
+═══════════════════════════════════════════════════════ */
+function loadSettingsUI() {
+  const s = state.settings;
+  document.getElementById('st-fontsize').value = s.fontSize;
+  document.getElementById('st-tabsize').value  = s.tabSize;
+  document.getElementById('st-theme').value    = s.theme;
+  setToggle('st-wrap',     s.wordWrap);
+  setToggle('st-linenums', s.lineNumbers);
+  setToggle('st-minimap',  s.minimap);
+  setToggle('st-stars',    s.stars);
+  setToggle('st-autosave', s.autosave);
+}
+
+function setToggle(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.classList.toggle('on', val);
+}
+
+function toggleSetting(el, id) {
+  el.classList.toggle('on');
+  applySettings();
+}
+
+function applySettings() {
+  state.settings.fontSize    = parseInt(document.getElementById('st-fontsize').value) || 13;
+  state.settings.tabSize     = parseInt(document.getElementById('st-tabsize').value) || 2;
+  state.settings.wordWrap    = document.getElementById('st-wrap').classList.contains('on');
+  state.settings.lineNumbers = document.getElementById('st-linenums').classList.contains('on');
+  state.settings.minimap     = document.getElementById('st-minimap').classList.contains('on');
+  state.settings.stars       = document.getElementById('st-stars').classList.contains('on');
+  state.settings.autosave    = document.getElementById('st-autosave').classList.contains('on');
+
+  const ed = document.getElementById('code-editor');
+  ed.style.fontSize   = state.settings.fontSize + 'px';
+  ed.style.whiteSpace = state.settings.wordWrap ? 'pre-wrap' : 'pre';
+  ed.style.tabSize    = state.settings.tabSize;
+  document.getElementById('line-numbers').style.fontSize = state.settings.fontSize + 'px';
+  document.getElementById('line-numbers').style.lineHeight = '1.72';
+
+  document.getElementById('line-numbers').style.display = state.settings.lineNumbers ? '' : 'none';
+  renderMinimap();
+  saveState();
+}
+
+function applyTheme() {
+  const theme = document.getElementById('st-theme').value;
+  document.body.className = theme;
+  state.settings.theme = theme;
+  saveState();
+}
+
+function increaseFontSize() {
+  state.settings.fontSize = Math.min(28, state.settings.fontSize + 1);
+  document.getElementById('st-fontsize').value = state.settings.fontSize;
+  applySettings();
+}
+function decreaseFontSize() {
+  state.settings.fontSize = Math.max(10, state.settings.fontSize - 1);
+  document.getElementById('st-fontsize').value = state.settings.fontSize;
+  applySettings();
+}
+
+/* ═══════════════════════════════════════════════════════
+   PANELS & LAYOUT
+═══════════════════════════════════════════════════════ */
+function toggleSidebar() {
+  document.getElementById('app').classList.toggle('sidebar-hidden');
+}
+function toggleAIPanel() {
+  document.getElementById('app').classList.toggle('ai-hidden');
+}
+
+function switchSidebarTab(el, id) {
+  document.querySelectorAll('.sidebar-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.sidebar-panel').forEach(p => p.classList.remove('active'));
+  if (el) el.classList.add('active');
+  document.getElementById('sp-' + id)?.classList.add('active');
+}
+
+function switchPanelTab(el, id) {
+  document.querySelectorAll('.panel-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel-content').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById(id)?.classList.add('active');
+  if (id === 'apod-panel' && !document.getElementById('apod-title').textContent.includes('—') === false) loadAPOD();
+}
+
+/* ═══════════════════════════════════════════════════════
+   COMMAND PALETTE
+═══════════════════════════════════════════════════════ */
+const COMMANDS = [
+  { name: 'New File',            kbd: 'Ctrl+N',        fn: openNewFileModal },
+  { name: 'Save File',           kbd: 'Ctrl+S',        fn: saveFile },
+  { name: 'Save All',            kbd: 'Ctrl+Shift+S',  fn: saveAllFiles },
+  { name: 'Close Tab',           kbd: 'Ctrl+W',        fn: closeCurrentTab },
+  { name: 'Open File',           kbd: 'Ctrl+O',        fn: openFolder },
+  { name: 'Toggle Find',         kbd: 'Ctrl+F',        fn: toggleFind },
+  { name: 'Toggle Sidebar',      kbd: 'Ctrl+B',        fn: toggleSidebar },
+  { name: 'Toggle AI Panel',     kbd: 'Ctrl+Shift+A',  fn: toggleAIPanel },
+  { name: 'Run / Preview',       kbd: 'F5',            fn: runOrPreview },
+  { name: 'Format Code',         kbd: 'Alt+Shift+F',   fn: formatCode },
+  { name: 'Duplicate Line',      kbd: 'Ctrl+D',        fn: duplicateLine },
+  { name: 'Delete Line',         kbd: '',              fn: deleteLine },
+  { name: 'Toggle Comment',      kbd: 'Ctrl+/',        fn: commentLine },
+  { name: 'Increase Font Size',  kbd: 'Ctrl++',        fn: increaseFontSize },
+  { name: 'Decrease Font Size',  kbd: 'Ctrl+-',        fn: decreaseFontSize },
+  { name: 'Export All Files',    kbd: '',              fn: exportAll },
+  { name: 'Download Current',    kbd: '',              fn: downloadFile },
+  { name: 'AI: Explain Code',    kbd: '',              fn: () => quickAsk('Explain this code') },
+  { name: 'AI: Find Bugs',       kbd: '',              fn: () => quickAsk('Find bugs in this code') },
+  { name: 'AI: Refactor',        kbd: '',              fn: () => quickAsk('Refactor for readability') },
+  { name: 'AI: Write Tests',     kbd: '',              fn: () => quickAsk('Write unit tests for this') },
+  { name: 'Load NASA APOD',      kbd: '',              fn: loadAPOD },
+];
+
+let cmdSelected = 0;
+
+function openCmdPalette() {
+  closeAllMenus();
+  document.getElementById('cmd-palette').classList.add('visible');
+  document.getElementById('cmd-input').value = '';
+  document.getElementById('cmd-input').focus();
+  renderCmdResults('');
+}
+
+function closeCmdPalette() {
+  document.getElementById('cmd-palette').classList.remove('visible');
+}
+
+function renderCmdResults(q) {
+  const results = q ? COMMANDS.filter(c => c.name.toLowerCase().includes(q.toLowerCase())) : COMMANDS;
+  cmdSelected = 0;
+  document.getElementById('cmd-results').innerHTML = results.map((c,i) =>
+    `<div class="cmd-result ${i===0?'selected':''}" onclick="runCmd(${COMMANDS.indexOf(c)})">
+      <span>${c.name}</span>
+      <div style="display:flex;gap:6px;align-items:center">
+        ${c.kbd ? `<span class="cmd-kbd">${c.kbd}</span>` : ''}
+      </div>
+    </div>`
+  ).join('');
+}
+
+function runCmd(i) {
+  closeCmdPalette();
+  if (COMMANDS[i]) COMMANDS[i].fn();
+}
+
+document.getElementById('cmd-input').addEventListener('input', e => {
+  renderCmdResults(e.target.value);
+});
+
+document.getElementById('cmd-input').addEventListener('keydown', e => {
+  const items = document.querySelectorAll('.cmd-result');
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    cmdSelected = Math.min(cmdSelected+1, items.length-1);
+    items.forEach((el,i) => el.classList.toggle('selected', i===cmdSelected));
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    cmdSelected = Math.max(cmdSelected-1, 0);
+    items.forEach((el,i) => el.classList.toggle('selected', i===cmdSelected));
+  } else if (e.key === 'Enter') {
+    const selected = document.querySelector('.cmd-result.selected');
+    if (selected) selected.click();
+  } else if (e.key === 'Escape') {
+    closeCmdPalette();
+  }
+});
+
+/* ═══════════════════════════════════════════════════════
+   CONTEXT MENU
+═══════════════════════════════════════════════════════ */
+function showCtxMenu(e) {
+  e.preventDefault();
+  const menu = document.getElementById('ctx-menu');
+  menu.style.left = Math.min(e.clientX, window.innerWidth-200) + 'px';
+  menu.style.top  = Math.min(e.clientY, window.innerHeight-200) + 'px';
+  menu.classList.add('visible');
+}
+
+function hideCtxMenu() { document.getElementById('ctx-menu').classList.remove('visible'); }
+
+function ctxCopy()      { document.execCommand('copy'); }
+function ctxCut()       { document.execCommand('cut'); }
+function ctxPaste()     { document.getElementById('code-editor').focus(); document.execCommand('paste'); }
+function ctxSelectAll() { document.getElementById('code-editor').focus(); document.execCommand('selectAll'); }
+
+/* ═══════════════════════════════════════════════════════
+   MENU
+═══════════════════════════════════════════════════════ */
+function toggleMenu(el) {
+  const isOpen = el.classList.contains('open');
+  closeAllMenus();
+  if (!isOpen) el.classList.add('open');
+}
+
+function closeAllMenus() {
+  document.querySelectorAll('.tb-menu-item.open').forEach(m => m.classList.remove('open'));
+}
+
+function closeModal(id) { document.getElementById(id).classList.remove('visible'); }
+
+/* ═══════════════════════════════════════════════════════
+   NOTIFICATIONS
+═══════════════════════════════════════════════════════ */
+function notify(msg, type='info', duration=3000) {
+  const icons = { info:'ℹ', success:'✓', warning:'⚠', error:'⊘' };
+  const el = document.createElement('div');
+  el.className = `notif ${type}`;
+  el.innerHTML = `<span class="notif-icon">${icons[type]||'ℹ'}</span><span class="notif-msg">${msg}</span><span class="notif-close" onclick="this.parentElement.remove()">×</span>`;
+  document.getElementById('notifications').appendChild(el);
+  setTimeout(() => el.remove(), duration);
+}
+
+/* ═══════════════════════════════════════════════════════
+   AI / OPENAI
+═══════════════════════════════════════════════════════ */
+function saveAPIKey() {
+  state.apiKey = document.getElementById('openai-key').value.trim();
+  saveState();
+}
+
+function addMessage(role, text) {
+  const container = document.getElementById('ai-chat-messages');
+  const icons = { user:'👤', ai:'✦' };
+  const div = document.createElement('div');
+  div.className = `msg ${role}`;
+  // Format code blocks
+  const formatted = text
+    .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre>$2</pre>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\n/g, '<br>');
+  div.innerHTML = `<div class="msg-avatar">${icons[role]||'?'}</div><div class="msg-body">${formatted}</div>`;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+async function sendAIMessage() {
+  const key    = document.getElementById('openai-key').value.trim() || state.apiKey;
+  const input  = document.getElementById('ai-input');
+  const prompt = input.value.trim();
+  if (!prompt) return;
+  if (!key) { notify('Paste your OpenAI API key in the AI panel', 'warning'); return; }
+
+  addMessage('user', prompt);
+  input.value = '';
+
+  const btn = document.getElementById('ai-send-btn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner">⟳</span>';
+
+  const code = state.activeTab ? state.files[state.activeTab]?.content || '' : '';
+  const fileName = state.activeTab ? state.files[state.activeTab]?.name || '' : '';
+
+  try {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json', 'Authorization':`Bearer ${key}` },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        messages: [
+          { role:'system', content:`You are an expert developer assistant inside Orion Editor, a futuristic space-themed code editor. Be concise, helpful, and precise. Current file: ${fileName}. When showing code, use triple backtick fences.` },
+          { role:'user', content: prompt + (code ? `\n\nCurrent file contents:\n\`\`\`\n${code.slice(0,3000)}\n\`\`\`` : '') },
+        ],
+        max_tokens: 1000, temperature: 0.3,
+      }),
+    });
+    const data = await res.json();
+    const reply = data.choices?.[0]?.message?.content || JSON.stringify(data.error || 'No response');
+    addMessage('ai', reply);
+  } catch(e) {
+    addMessage('ai', '⊘ Error: ' + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Send';
+  }
+}
+
+function aiInputKeydown(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendAIMessage(); }
+}
+
+function quickAsk(prompt) {
+  // Switch to AI tab
+  document.querySelectorAll('.panel-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel-content').forEach(p => p.classList.remove('active'));
+  document.querySelector('.panel-tab').classList.add('active');
+  document.getElementById('ai-chat').classList.add('active');
+
+  document.getElementById('ai-input').value = prompt;
+  sendAIMessage();
+}
+
+function aiExplainSelection() {
+  const ed = document.getElementById('code-editor');
+  const sel = ed.value.slice(ed.selectionStart, ed.selectionEnd).trim();
+  if (!sel) { notify('Select some code first', 'warning'); return; }
+  quickAsk('Explain this code:\n```\n' + sel + '\n```');
+}
+
+function aiRefactorSelection() {
+  const ed = document.getElementById('code-editor');
+  const sel = ed.value.slice(ed.selectionStart, ed.selectionEnd).trim();
+  if (!sel) { notify('Select some code first', 'warning'); return; }
+  quickAsk('Refactor this code to be cleaner and more efficient:\n```\n' + sel + '\n```');
+}
+
+/* ═══════════════════════════════════════════════════════
+   NASA APOD
+═══════════════════════════════════════════════════════ */
+async function loadAPOD() {
+  document.getElementById('apod-img').innerHTML = '🛸 Contacting NASA...';
+  document.getElementById('apod-title').textContent = '—';
+  document.getElementById('apod-date').textContent  = '—';
+  document.getElementById('apod-desc').textContent  = '—';
+  try {
+    const res  = await fetch('https://api.nasa.gov/planetary/apod?api_key=DEMO_KEY');
+    const data = await res.json();
+    const imgEl = document.getElementById('apod-img');
+    if (data.media_type === 'image') {
+      imgEl.innerHTML = `<img src="${data.url}" alt="${data.title}" onerror="this.parentElement.textContent='⚠ Image unavailable'">`;
+    } else {
+      imgEl.textContent = '🎬 ' + (data.media_type || 'media') + ' — click link below';
+    }
+    document.getElementById('apod-title').textContent = data.title || '—';
+    document.getElementById('apod-date').textContent  = `📅 ${data.date}`;
+    document.getElementById('apod-desc').textContent  = data.explanation?.slice(0, 300) + '...' || '—';
+  } catch(e) {
+    document.getElementById('apod-img').textContent = '⚠ NASA unreachable';
+    document.getElementById('apod-desc').textContent = e.message;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   STATUS BAR EXTRAS
+═══════════════════════════════════════════════════════ */
+function promptChangeLang() {
+  if (!state.activeTab) return;
+  const langs = Object.values(LANG_MAP).filter((v,i,a) => a.indexOf(v)===i).sort();
+  const current = state.files[state.activeTab].lang;
+  const choice = prompt('Set language:\n' + langs.join(', '), current);
+  if (choice && langs.includes(choice)) {
+    state.files[state.activeTab].lang = choice;
+    document.getElementById('sb-lang').textContent = choice;
+    saveState();
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   DRAG & DROP onto editor area
+═══════════════════════════════════════════════════════ */
+document.getElementById('editor-area').addEventListener('dragover', e => e.preventDefault());
+document.getElementById('editor-area').addEventListener('drop', e => {
+  e.preventDefault();
+  Array.from(e.dataTransfer.files).forEach(file => {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const id = createFile(file.name, ev.target.result);
+      openFile(id);
+      notify('✓ Opened ' + file.name, 'success');
+    };
+    reader.readAsText(file);
+  });
+});
+
+/* ═══════════════════════════════════════════════════════
+   GLOBAL EVENT LISTENERS
+═══════════════════════════════════════════════════════ */
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    closeCmdPalette();
+    closeAllMenus();
+    hideCtxMenu();
+    closeModal('modal-new-file');
+    closeModal('modal-rename');
+  }
+  if ((e.ctrlKey||e.metaKey) && e.key === 'p') { e.preventDefault(); openCmdPalette(); }
+  if ((e.ctrlKey||e.metaKey) && e.shiftKey && e.key === 'A') { e.preventDefault(); toggleAIPanel(); }
+  if ((e.ctrlKey||e.metaKey) && e.key === 'n' && document.activeElement.tagName !== 'TEXTAREA') { e.preventDefault(); openNewFileModal(); }
+});
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('.tb-menu-item')) closeAllMenus();
+  if (!e.target.closest('#ctx-menu')) hideCtxMenu();
+  if (!e.target.closest('#cmd-palette') && !e.target.closest('.tb-btn')) closeCmdPalette();
+  if (e.target.classList.contains('modal-backdrop')) {
+    document.querySelectorAll('.modal-backdrop.visible').forEach(m => m.classList.remove('visible'));
+  }
+});
+
+// Enter key on modals
+document.getElementById('new-file-name').addEventListener('keydown', e => { if(e.key==='Enter') confirmNewFile(); });
+document.getElementById('rename-input').addEventListener('keydown', e => { if(e.key==='Enter') confirmRename(); });
+
+/* ═══════════════════════════════════════════════════════
+   INIT
+═══════════════════════════════════════════════════════ */
+function init() {
+  loadState();
+
+  // Apply API key
+  if (state.apiKey) document.getElementById('openai-key').value = state.apiKey;
+
+  // Apply theme
+  if (state.settings.theme) document.body.className = state.settings.theme;
+
+  // Create welcome file if empty
+  if (Object.keys(state.files).length === 0) {
+    const id = createFile('welcome.js',
+`// ╔══════════════════════════════════════════════╗
+// ║     ORION EDITOR — Welcome to Your IDE      ║
+// ║     Futuristic. Persistent. Intelligent.    ║
+// ╚══════════════════════════════════════════════╝
+
+// All files auto-save to localStorage.
+// Press Ctrl+P for the Command Palette.
+// Use the AI panel (right) for code assistance.
+// Drag & drop files onto the editor to open them.
+
+const orion = {
+  version: '1.0.0',
+  features: [
+    'localStorage persistence',
+    'Multi-file tabs',
+    'OpenAI integration',
+    'NASA APOD feed',
+    'Find & replace',
+    'Auto-indent & bracket matching',
+    'Global file search',
+    'Code snippets',
+    'Command palette',
+    'Theme variants',
+  ],
+  greet() {
+    console.log(\`Welcome to Orion v\${this.version}\`);
+    console.log('Features:', this.features.join(', '));
+  }
+};
+
+orion.greet();
+`);
+    const id2 = createFile('index.html',
+`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Project</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1>Hello from Orion Editor</h1>
+  <script src="app.js"><\/script>
+</body>
+</html>
+`);
+    const id3 = createFile('style.css',
+`/* Orion Project Styles */
+:root {
+  --primary: #1a8fff;
+  --bg: #010308;
+  --text: #d4eaff;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, sans-serif;
+  padding: 2rem;
+}
+
+h1 { color: var(--primary); }
+`);
+    state.activeTab = id;
+  }
+
+  // Clean up tabs that reference deleted files
+  state.tabs = state.tabs.filter(id => state.files[id]);
+  if (!state.activeTab || !state.files[state.activeTab]) {
+    state.activeTab = state.tabs[0] || null;
+  }
+
+  loadSettingsUI();
+  renderSnippets();
+  renderAll();
+
+  // Focus editor
+  setTimeout(() => { document.getElementById('code-editor').focus(); }, 100);
+
+  // Load APOD in background
+  setTimeout(loadAPOD, 500);
+
+  notify('⬡ Orion Editor online', 'success', 2500);
+  console.log('%c⬡ ORION EDITOR', 'color:#1a8fff;font-size:16px;font-family:monospace');
+}
+
+init();
+</script>
+</body>
+</html>
